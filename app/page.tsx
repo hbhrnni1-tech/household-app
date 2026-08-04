@@ -1,325 +1,748 @@
-"use client";
+'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-export default function Home() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [isDarkMode, setIsDarkMode] = useState(true);
+// --- Types & Interfaces ---
+type CategoryKey = 'electricity' | 'fire' | 'hazmat' | 'infrastructure' | 'firstaid';
 
-  // States עבור מסך בודק שטח
-  const [selectedArea, setSelectedArea] = useState('');
-  const [inspectionSubmitted, setInspectionSubmitted] = useState(false);
-  const [answers, setAnswers] = useState({
-    fireExtinguisher: 'tkn',
-    emergencyExit: 'tkn',
-    ppeWorn: 'tkn',
-    cleanliness: 'tkn',
+interface CategoryConfig {
+  name: string;
+  freq: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  icon: string;
+}
+
+interface Asset {
+  id: string;
+  name: string;
+  category: CategoryKey;
+  location: string;
+  status: 'pending' | 'pass' | 'fail' | 'resolved';
+  lastChecked?: string;
+  inspector?: string;
+  checklist?: { text: string; done: boolean; photo?: string }[];
+  comment?: string;
+}
+
+interface GeneralObservation {
+  id: string;
+  name: string;
+  status: 'open' | 'met';
+  date?: string;
+  inspector?: string;
+  comment?: string;
+  photo?: string;
+}
+
+export default function HouseholdSafetyApp() {
+  // --- States ---
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [lang, setLang] = useState<'he' | 'en'>('he');
+  const [viewMode, setViewMode] = useState<'field' | 'admin'>('field');
+  const [landingRole, setLandingRole] = useState<'select' | 'worker' | 'admin-lock' | 'supervisor'>('select');
+  const [adminPass, setAdminPass] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'assets' | 'categories' | 'export'>('dashboard');
+
+  // Worker flow states inside the field view
+  const [workerName, setWorkerName] = useState('');
+  const [inspectorName, setInspectorName] = useState('');
+  const [currentFolder, setCurrentFolder] = useState<CategoryKey | 'observations' | null>(null);
+  const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
+  const [scanMode, setScanMode] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ text: string; isFail?: boolean } | null>(null);
+
+  // Modal drill-down state in admin
+  const [modalAsset, setModalAsset] = useState<Asset | null>(null);
+
+  // Asset search & filtering in admin
+  const [assetSearch, setAssetSearch] = useState('');
+
+  // --- Mock Data ---
+  const [categories, setCategories] = useState<Record<CategoryKey, CategoryConfig>>({
+    electricity: { name: 'לוחות חשמל ותשתיות', freq: 'weekly', icon: '⚡' },
+    fire: { name: 'ציוד כיבוי אש', freq: 'monthly', icon: '🧯' },
+    hazmat: { name: 'חומרים מסוכנים', freq: 'daily', icon: '⚠️' },
+    infrastructure: { name: 'תשתיות מים וגז', freq: 'monthly', icon: '🔧' },
+    firstaid: { name: 'עזרה ראשונה ובטיחות', freq: 'monthly', icon: '🩹' },
   });
-  const [notes, setNotes] = useState('');
 
-  // States עבור לוח ניהול (סיסמה)
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [assets, setAssets] = useState<Asset[]>([
+    { id: 'EL-01', name: 'לוח חשמל ראשי קומה 1', category: 'electricity', location: 'מסדרון מרכזי', status: 'pending' },
+    { id: 'EL-02', name: 'לוח חשמל משנה מטבח', category: 'electricity', location: 'מטבח ראשי', status: 'pending' },
+    { id: 'FIRE-01', name: 'מטחנה אבקת יבש 6ק"ג', category: 'fire', location: 'כניסה ראשית', status: 'pending' },
+    { id: 'FIRE-02', name: 'גלגולון כיבוי אש', category: 'fire', location: 'מסדרון אגף מערבי', status: 'pending' },
+    { id: 'HZ-01', name: 'ארון חומרי ניקוי וחיטוי', category: 'hazmat', location: 'חדר שירות', status: 'pending' },
+    { id: 'INF-01', name: 'ברז כיבוי ראשי (ספרינקלרים)', category: 'infrastructure', location: 'חצר חיצונית', status: 'pending' },
+    { id: 'FA-01', name: 'ערכת עזרה ראשונה מספר 1', category: 'firstaid', location: 'עמדת שמירה', status: 'pending' },
+  ]);
 
-  const handleAnswerChange = (question: string, value: string) => {
-    setAnswers(prev => ({ ...prev, [question]: value }));
-  };
+  const [observations, setObservations] = useState<GeneralObservation[]>([
+    { id: 'OBS-01', name: 'מעברים פנויים ללא חסימות ציוד', status: 'open' },
+    { id: 'OBS-02', name: 'תאורת חירום תקינה במסדרונות', status: 'open' },
+    { id: 'OBS-03', name: 'שילוט מילוט נראה וברור', status: 'open' },
+  ]);
 
-  const handleSubmitInspection = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedArea) {
-      alert('נא לבחור אזור בדיקה');
-      return;
-    }
-    setInspectionSubmitted(true);
-  };
+  // Handle Theme Attribute on HTML/Body
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
-  const resetInspection = () => {
-    setSelectedArea('');
-    setInspectionSubmitted(false);
-    setAnswers({ fireExtinguisher: 'tkn', emergencyExit: 'tkn', ppeWorn: 'tkn', cleanliness: 'tkn' });
-    setNotes('');
-    setActiveTab('home');
+  const showToast = (text: string, isFail = false) => {
+    setToastMessage({ text, isFail });
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === '1234') {
-      setIsAdminAuthenticated(true);
+    if (adminPass === '1234' || adminPass === 'admin') {
+      setViewMode('admin');
+      setLandingRole('select');
+      setAdminPass('');
+      setAdminError('');
     } else {
-      alert('סיסמה שגויה (נסה 1234)');
+      setAdminError('סיסמה שגויה. נסה שוב (ברירת מחדל: 1234)');
     }
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-[#1C1F22] text-[#EDEEDE]' : 'bg-[#EDEEDE] text-[#1C1F22]'} flex flex-col font-sans transition-colors duration-300`} dir="rtl">
-      {/* סרגל עליון */}
-      <header className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-300'} border-b px-6 py-4 flex justify-between items-center shadow-md`}>
-        <div className="flex items-center gap-4">
-          <span className="bg-[#F5B700] text-[#1C1F22] font-black px-3 py-1 rounded text-sm shadow">דיגיטציה של תחזוקת בטיחות במפעל</span>
-          <h1 className="text-xl font-bold tracking-wide">משק בית • מעקב בטיחות</h1>
+    <div id="app">
+      {/* Top Navigation Bar */}
+      <header className="topbar">
+        <div className="brand">
+          <span className="eyebrow">HOUSEHOLD SAFETY · V1.0</span>
+          <h1>מעקב בטיחות משק בית</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className={`p-2 rounded-lg ${isDarkMode ? 'bg-[#2E3338] text-yellow-400' : 'bg-zinc-200 text-zinc-800'} transition`}
-          >
-            {isDarkMode ? '🌙' : '☀️'}
-          </button>
-          <button 
-            onClick={() => { setActiveTab('home'); setIsAdminAuthenticated(false); setAdminPassword(''); }} 
-            className="px-4 py-2 bg-[#2E3338] hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition"
-          >
-            מסך כניסה
-          </button>
-        </div>
-      </header>
-
-      {/* פס עיצוב אזהרה צהוב-שחור */}
-      <div className="h-2 w-full bg-[repeating-linear-gradient(-45deg,#F5B700,#F5B700_15px,#1C1F22_15px,#1C1F22_30px)]"></div>
-
-      {/* תוכן ראשי */}
-      <main className="flex-1 flex items-center justify-center p-6">
-        
-        {/* 1. מסך ראשי - בחירת תפקיד */}
-        {activeTab === 'home' && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-lg w-full text-center transition-colors`}>
-            <h2 className="text-2xl font-bold mb-6 text-[#F5B700]">בחר את סוג הכניסה למערכת</h2>
-            
-            <div className="flex flex-col gap-4">
-              {/* כפתור בודק שטח */}
-              <button 
-                onClick={() => setActiveTab('inspector')}
-                className={`p-5 rounded-xl border-2 border-[#F5B700] ${isDarkMode ? 'bg-[#1C1F22] hover:bg-[#2E3338]' : 'bg-zinc-50 hover:bg-zinc-100'} transition flex items-center gap-4 text-right group shadow-lg`}
-              >
-                <div className="text-3xl bg-[#F5B700]/10 p-3 rounded-lg group-hover:bg-[#F5B700]/20 transition">📱</div>
-                <div>
-                  <h3 className="text-lg font-bold text-[#F5B700]">בודק שטח</h3>
-                  <p className="text-sm text-zinc-400">סריקת QR ומילוי בדיקות</p>
-                </div>
-              </button>
-
-              {/* כפתור לוח ניהול */}
-              <button 
-                onClick={() => setActiveTab('admin')}
-                className={`p-5 rounded-xl border-2 border-zinc-700 ${isDarkMode ? 'bg-[#1C1F22] hover:bg-[#2E3338]' : 'bg-zinc-50 hover:bg-zinc-100'} transition flex items-center gap-4 text-right group shadow-lg`}
-              >
-                <div className="text-3xl bg-zinc-800 p-3 rounded-lg">🔒</div>
-                <div>
-                  <h3 className="text-lg font-bold">לוח ניהול</h3>
-                  <p className="text-sm text-zinc-400">דורש סיסמה</p>
-                </div>
-              </button>
-
-              {/* כפתור מפקח */}
-              <button 
-                onClick={() => setActiveTab('viewer')}
-                className={`p-5 rounded-xl border-2 border-zinc-700 ${isDarkMode ? 'bg-[#1C1F22] hover:bg-[#2E3338]' : 'bg-zinc-50 hover:bg-zinc-100'} transition flex items-center gap-4 text-right group shadow-lg`}
-              >
-                <div className="text-3xl bg-zinc-800 p-3 rounded-lg">🕵️‍♂️</div>
-                <div>
-                  <h3 className="text-lg font-bold">מפקח</h3>
-                  <p className="text-sm text-zinc-400">תצוגה בלבד, ללא עריכה</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 2. מסך בודק שטח */}
-        {activeTab === 'inspector' && !inspectionSubmitted && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-2xl w-full text-right`}>
-            <h2 className="text-2xl font-bold mb-6 text-[#F5B700] flex items-center gap-2">
-              <span>📱</span> טופס בדיקת בטיחות שטח
-            </h2>
-
-            <form onSubmit={handleSubmitInspection} className="flex flex-col gap-6">
-              <div>
-                <label className="block text-sm font-medium mb-2 opacity-80">בחר אזור בדיקה במפעל:</label>
-                <select 
-                  value={selectedArea} 
-                  onChange={(e) => setSelectedArea(e.target.value)}
-                  className={`w-full ${isDarkMode ? 'bg-[#1C1F22] text-white border-zinc-700' : 'bg-zinc-100 text-black border-zinc-300'} border rounded-lg p-3 focus:border-[#F5B700] outline-none`}
-                >
-                  <option value="">-- בחר אזור --</option>
-                  <option value="קו ייצור 1">קו ייצור 1</option>
-                  <option value="מחסן מרכזי">מחסן מרכזי</option>
-                  <option value="אזור טעינה ופריקה">אזור טעינה ופריקה</option>
-                  <option value="משרדי הנהלה">משרדי הנהלה</option>
-                </select>
-              </div>
-
-              <div className="border-t border-zinc-700 pt-4 flex flex-col gap-4">
-                <h3 className="font-bold text-[#F5B700]">שאלון בדיקה תקופתי:</h3>
-
-                {/* שאלה 1 */}
-                <div className={`${isDarkMode ? 'bg-[#1C1F22] border-zinc-800' : 'bg-zinc-100 border-zinc-300'} p-4 rounded-xl border flex justify-between items-center`}>
-                  <span>מטפה כיבוי אש נגיש ותקין?</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleAnswerChange('fireExtinguisher', 'tkn')} className={`px-3 py-1 rounded text-sm ${answers.fireExtinguisher === 'tkn' ? 'bg-green-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>תקין</button>
-                    <button type="button" onClick={() => handleAnswerChange('fireExtinguisher', 'lo_tkn')} className={`px-3 py-1 rounded text-sm ${answers.fireExtinguisher === 'lo_tkn' ? 'bg-red-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>לא תקין</button>
-                  </div>
-                </div>
-
-                {/* שאלה 2 */}
-                <div className={`${isDarkMode ? 'bg-[#1C1F22] border-zinc-800' : 'bg-zinc-100 border-zinc-300'} p-4 rounded-xl border flex justify-between items-center`}>
-                  <span>יציאות חירום פנויות וללא חסימות?</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleAnswerChange('emergencyExit', 'tkn')} className={`px-3 py-1 rounded text-sm ${answers.emergencyExit === 'tkn' ? 'bg-green-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>תקין</button>
-                    <button type="button" onClick={() => handleAnswerChange('emergencyExit', 'lo_tkn')} className={`px-3 py-1 rounded text-sm ${answers.emergencyExit === 'lo_tkn' ? 'bg-red-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>לא תקין</button>
-                  </div>
-                </div>
-
-                {/* שאלה 3 */}
-                <div className={`${isDarkMode ? 'bg-[#1C1F22] border-zinc-800' : 'bg-zinc-100 border-zinc-300'} p-4 rounded-xl border flex justify-between items-center`}>
-                  <span>שימוש בציוד מגן אישי (PPE) כנדרש?</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleAnswerChange('ppeWorn', 'tkn')} className={`px-3 py-1 rounded text-sm ${answers.ppeWorn === 'tkn' ? 'bg-green-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>תקין</button>
-                    <button type="button" onClick={() => handleAnswerChange('ppeWorn', 'lo_tkn')} className={`px-3 py-1 rounded text-sm ${answers.ppeWorn === 'lo_tkn' ? 'bg-red-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>לא תקין</button>
-                  </div>
-                </div>
-
-                {/* שאלה 4 */}
-                <div className={`${isDarkMode ? 'bg-[#1C1F22] border-zinc-800' : 'bg-zinc-100 border-zinc-300'} p-4 rounded-xl border flex justify-between items-center`}>
-                  <span>סביבת העבודה נקייה ומסודרת?</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleAnswerChange('cleanliness', 'tkn')} className={`px-3 py-1 rounded text-sm ${answers.cleanliness === 'tkn' ? 'bg-green-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>תקין</button>
-                    <button type="button" onClick={() => handleAnswerChange('cleanliness', 'lo_tkn')} className={`px-3 py-1 rounded text-sm ${answers.cleanliness === 'lo_tkn' ? 'bg-red-600 text-white font-bold' : 'bg-zinc-800 text-zinc-400'}`}>לא תקין</button>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 opacity-80">הערות חופשיות / תקלות לטיפול:</label>
-                <textarea 
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="הכנס הערות במידת הצורך..."
-                  className={`w-full ${isDarkMode ? 'bg-[#1C1F22] text-white border-zinc-700' : 'bg-zinc-100 text-black border-zinc-300'} border rounded-lg p-3 focus:border-[#F5B700] outline-none h-24 resize-none`}
-                ></textarea>
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  type="submit"
-                  className="flex-1 py-3 bg-[#F5B700] text-[#1C1F22] font-bold rounded-xl hover:bg-yellow-500 transition shadow-lg"
-                >
-                  שלח דיווח בדיקה
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setActiveTab('home')}
-                  className="px-6 py-3 bg-zinc-700 text-white font-medium rounded-xl hover:bg-zinc-600 transition"
-                >
-                  ביטול
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* אישור שליחת טופס בודק שטח */}
-        {activeTab === 'inspector' && inspectionSubmitted && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center`}>
-            <div className="text-5xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold mb-2 text-[#F5B700]">הדיוווח נקלט בהצלחה!</h2>
-            <p className="opacity-80 mb-6">הנתונים עבור <strong>{selectedArea}</strong> נשמרו במערכת בהצלחה.</p>
-            <button 
-              onClick={resetInspection}
-              className="w-full py-3 bg-[#F5B700] text-[#1C1F22] font-bold rounded-xl hover:bg-yellow-500 transition"
+        <div className="topbar-right">
+          {viewMode === 'field' && landingRole !== 'select' && (
+            <button
+              className="topbar-home-btn"
+              onClick={() => {
+                setLandingRole('select');
+                setCurrentFolder(null);
+                setActiveAsset(null);
+              }}
             >
-              חזרה למסך הראשי
+              ← חזרה לתפריט ראשי
+            </button>
+          )}
+          <div className="mode-toggle">
+            <button
+              className={viewMode === 'field' ? 'active' : ''}
+              onClick={() => setViewMode('field')}
+            >
+              שטח (עובד)
+            </button>
+            <button
+              className={viewMode === 'admin' ? 'active' : ''}
+              onClick={() => setViewMode('admin')}
+            >
+              ניהול (מנהל)
             </button>
           </div>
-        )}
+          <button
+            className="theme-toggle-btn"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            title="החלף ערכת נושא"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          <select
+            className="lang-select"
+            value={lang}
+            onChange={(e) => setLang(e.target.value as 'he' | 'en')}
+          >
+            <option value="he">HE</option>
+            <option value="en">EN</option>
+          </select>
+        </div>
+      </header>
+      <div className="hazard"></div>
 
-        {/* 3. לוח ניהול (עם אימות סיסמה 1234) */}
-        {activeTab === 'admin' && !isAdminAuthenticated && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center`}>
-            <div className="text-4xl mb-3">🔒</div>
-            <h2 className="text-2xl font-bold mb-2 text-[#F5B700]">כניסה ללוח ניהול</h2>
-            <p className="text-sm opacity-70 mb-6">הזן סיסמה כדי לגשת להגדרות ולתצוגת הנתונים (סיסמה לדוגמה: 1234)</p>
-            
-            <form onSubmit={handleAdminLogin} className="flex flex-col gap-4 text-right">
-              <input 
-                type="password"
-                placeholder="הכנס סיסמה..."
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className={`w-full ${isDarkMode ? 'bg-[#1C1F22] text-white border-zinc-700' : 'bg-zinc-100 text-black border-zinc-300'} border rounded-lg p-3 focus:border-[#F5B700] outline-none text-center tracking-widest text-lg`}
-              />
-              <button 
-                type="submit"
-                className="w-full py-3 bg-[#F5B700] text-[#1C1F22] font-bold rounded-xl hover:bg-yellow-500 transition shadow-lg"
+      <main>
+        {viewMode === 'field' ? (
+          <div className="field-wrap">
+            <div className="phone">
+              <div className="phone-screen">
+                {/* Landing & Roles selection */}
+                {landingRole === 'select' && (
+                  <div className="landing-wrap" style={{ minHeight: 'auto', padding: '24px 16px' }}>
+                    <div className="landing-card" style={{ boxShadow: 'none', border: 'none', background: 'transparent', padding: 0 }}>
+                      <span className="landing-eyebrow">בחר את תפקידך לכניסה למערכת</span>
+                      <div className="landing-buttons">
+                        <button
+                          className="landing-btn field"
+                          onClick={() => setLandingRole('worker')}
+                        >
+                          <span className="landing-icon">👷‍♂️</span>
+                          <span className="landing-title">בדיקות שטח / משתמש</span>
+                          <span className="landing-sub">ביצוע ביקורות ותיעוד משק בית</span>
+                        </button>
+                        <button
+                          className="landing-btn supervisor"
+                          onClick={() => setLandingRole('supervisor')}
+                        >
+                          <span className="landing-icon">🛡️</span>
+                          <span className="landing-title">מנהל אירועים / אחראי</span>
+                          <span className="landing-sub">סקירת תקלות פתוחות ואישור מענים</span>
+                        </button>
+                        <button
+                          className="landing-btn admin"
+                          onClick={() => setLandingRole('admin-lock')}
+                        >
+                          <span className="landing-icon">⚙️</span>
+                          <span className="landing-title">הנהלה וניהול מערכת</span>
+                          <span className="landing-sub">צפייה بدוחות, הגדרות וניהול נכסים</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {landingRole === 'admin-lock' && (
+                  <div className="landing-wrap" style={{ minHeight: 'auto', padding: '24px 16px' }}>
+                    <div className="landing-card lock-card">
+                      <div className="lock-title">כניסת מנהל מערכת</div>
+                      <form onSubmit={handleAdminLogin}>
+                        <div className="lock-input-wrap">
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            className="lock-input mono"
+                            placeholder="••••"
+                            maxLength={6}
+                            value={adminPass}
+                            onChange={(e) => setAdminPass(e.target.value)}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="lock-eye-btn"
+                            onClick={() => setShowPass(!showPass)}
+                          >
+                            {showPass ? '👁️' : '👁️‍🗨️'}
+                          </button>
+                        </div>
+                        {adminError && <div className="lock-error">{adminError}</div>}
+                        <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                          <button type="submit" className="submit-btn" style={{ flex: 1, padding: '10px' }}>
+                            כניסה למערכת
+                          </button>
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            onClick={() => { setLandingRole('select'); setAdminError(''); }}
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {landingRole === 'worker' && (
+                  <div className="field-header">
+                    <div className="field-header-top">
+                      <button className="entry-back-btn" onClick={() => setLandingRole('select')}>
+                        החלף משתמש
+                      </button>
+                    </div>
+                    <span className="eyebrow">FIELD INSPECTION V1.0</span>
+                    <h2>בדיקות בטיחות שוטפות</h2>
+                    <div className="inspector-row">
+                      <span className="inspector-badge">👤 בודק: משתמש משק בית</span>
+                    </div>
+                  </div>
+                )}
+
+                {landingRole === 'supervisor' && (
+                  <div className="field-header">
+                    <div className="field-header-top">
+                      <button className="entry-back-btn" onClick={() => setLandingRole('select')}>
+                        החלף משתמש
+                      </button>
+                    </div>
+                    <span className="eyebrow">SUPERVISOR DASHBOARD</span>
+                    <h2>סקירת אירועים ותקלות</h2>
+                  </div>
+                )}
+
+                {/* Worker Folders / Assets List */}
+                {landingRole === 'worker' && !currentFolder && !activeAsset && (
+                  <div className="field-body">
+                    <div className="scan-instruction">
+                      בחר קטגוריה לבדיקה או סרוק ברקוד נכס ישירות:
+                    </div>
+                    <div className="folder-grid">
+                      {Object.entries(categories).map(([key, cat]) => {
+                        const catAssets = assets.filter((a) => a.category === key);
+                        const passedCount = catAssets.filter((a) => a.status === 'pass').length;
+                        return (
+                          <div
+                            key={key}
+                            className="folder-tile"
+                            onClick={() => setCurrentFolder(key as CategoryKey)}
+                          >
+                            <div className="folder-icon">{cat.icon}</div>
+                            <div className="folder-name">{cat.name}</div>
+                            <div className="folder-count">
+                              {passedCount}/{catAssets.length} בוצעו
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div
+                        className="folder-tile obs-folder"
+                        onClick={() => setCurrentFolder('observations')}
+                      >
+                        <div className="folder-icon">📋</div>
+                        <div className="folder-name">תצפיות בטיחות וכלליות</div>
+                        <div className="folder-count obs-open">
+                          {observations.filter((o) => o.status === 'open').length} תצפיות פתוחות
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="scan-btn"
+                      onClick={() => setScanMode(true)}
+                    >
+                      <span className="dot"></span>
+                      סריקת קוד QR מהירה לנכס
+                    </button>
+                  </div>
+                )}
+
+                {/* Inside a Specific Folder */}
+                {landingRole === 'worker' && currentFolder && currentFolder !== 'observations' && !activeAsset && (
+                  <div className="field-body">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', marginBottom: '10px' }}>
+                      <button className="back-link" onClick={() => setCurrentFolder(null)}>
+                        ← חזרה לקטגוריות
+                      </button>
+                      <span style={{ fontWeight: '700', fontSize: '14px' }}>
+                        {categories[currentFolder as CategoryKey]?.name}
+                      </span>
+                    </div>
+                    <div className="qr-grid">
+                      {assets
+                        .filter((a) => a.category === currentFolder)
+                        .map((asset) => (
+                          <div
+                            key={asset.id}
+                            className="qr-tile"
+                            onClick={() => setActiveAsset(asset)}
+                          >
+                            <div className="qr-code">
+                              <span style={{ fontSize: '24px' }}>{categories[currentFolder as CategoryKey]?.icon}</span>
+                            </div>
+                            <div className="a-name">{asset.name}</div>
+                            <div className="a-id">{asset.id}</div>
+                            <div>
+                              <span className={`a-status st-${asset.status}`}>
+                                {asset.status === 'pending' && 'ממתין לבדיקה'}
+                                {asset.status === 'pass' && 'תקין'}
+                                {asset.status === 'fail' && 'תקול / לטיפול'}
+                                {asset.status === 'resolved' && 'טופל'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* General Observations Folder View */}
+                {landingRole === 'worker' && currentFolder === 'observations' && (
+                  <div className="field-body">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <button className="back-link" onClick={() => setCurrentFolder(null)}>
+                        ← חזרה
+                      </button>
+                      <span style={{ fontWeight: '700', fontSize: '14px' }}>תצפיות בטיחות</span>
+                    </div>
+                    <div className="obs-progress-banner">
+                      דווח על ממצאים או ודא תקינות סביבתית שוטפת במשק הבית.
+                    </div>
+                    <div className="obs-recent-section">
+                      {observations.map((obs) => (
+                        <div key={obs.id} className="obs-recent-row">
+                          <span className="obs-recent-name">{obs.name}</span>
+                          <button
+                            className={`btn small ${obs.status === 'met' ? 'yellow' : ''}`}
+                            onClick={() => {
+                              setObservations(
+                                observations.map((o) =>
+                                  o.id === obs.id
+                                    ? { ...o, status: o.status === 'open' ? 'met' : 'open' }
+                                    : o
+                                )
+                              );
+                              showToast('סטטוס תצפית עודכן בהצלחה');
+                            }}
+                          >
+                            {obs.status === 'open' ? 'סמן כבוצע' : 'פתוח מחדש'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Asset Inspection Form */}
+                {landingRole === 'worker' && activeAsset && (
+                  <div className="field-body">
+                    <button className="back-link" onClick={() => setActiveAsset(null)}>
+                      ← חזרה לרשימת נכסים
+                    </button>
+                    <div className="asset-card">
+                      <span className="a-type mono">{activeAsset.id}</span>
+                      <h3>{activeAsset.name}</h3>
+                      <div className="asset-meta">
+                        <div>
+                          <span className="k">מיקום:</span> <span>{activeAsset.location}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="checklist-box">
+                      <div className="checklist-head">
+                        <span style={{ fontSize: '12px', fontWeight: '700' }}>רשימת תיוג לבדיקה:</span>
+                        <span className="checklist-count">3 סעיפים</span>
+                      </div>
+                      {['שלמות פיזית ומבנית של הציוד', 'אין חסימות גישה או סכנת מעידה סביבו', 'שילוט אזהרה או תוקף בתוקף'].map((chkText, idx) => (
+                        <label key={idx} className="check-row">
+                          <input type="checkbox" defaultChecked />
+                          <div className="check-box">✓</div>
+                          <div className="check-text">{chkText}</div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="pf-row">
+                      <button
+                        className="pf-btn pass sel"
+                        onClick={() => {
+                          setAssets(
+                            assets.map((a) =>
+                              a.id === activeAsset.id ? { ...a, status: 'pass', lastChecked: new Date().toLocaleDateString() } : a
+                            )
+                          );
+                          showToast('הבדיקה עודכנה כתקינה בהצלחה!');
+                          setActiveAsset(null);
+                        }}
+                      >
+                        ✓ תקין לחלוטין
+                      </button>
+                      <button
+                        className="pf-btn fail"
+                        onClick={() => {
+                          setAssets(
+                            assets.map((a) =>
+                              a.id === activeAsset.id ? { ...a, status: 'fail', lastChecked: new Date().toLocaleDateString() } : a
+                            )
+                          );
+                          showToast('דווחה תקלה בהצלחה למערכת', true);
+                          setActiveAsset(null);
+                        }}
+                      >
+                        ⚠️ נמצאה תקלה
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Supervisor View */}
+                {landingRole === 'supervisor' && (
+                  <div className="field-body">
+                    <div className="obs-progress-banner" style={{ background: 'var(--surface)', border: '1px solid var(--line-light)' }}>
+                      מרכז בקרה למנהל: מעקב אחר תקלות פתוחות ואישור מענים ממשק הבית.
+                    </div>
+                    {assets.filter((a) => a.status === 'fail').length === 0 ? (
+                      <div className="empty-state">אין תקלות פתוחות הדורשות טיפול כרגע. הכל תקין!</div>
+                    ) : (
+                      assets
+                        .filter((a) => a.status === 'fail')
+                        .map((asset) => (
+                          <div key={asset.id} className="asset-card" style={{ borderLeft: '4px solid var(--red)' }}>
+                            <span className="a-type mono">{asset.id}</span>
+                            <h3>{asset.name}</h3>
+                            <div className="asset-meta" style={{ marginBottom: '10px' }}>
+                              <div>
+                                <span className="k">מיקום:</span> <span>{asset.location}</span>
+                              </div>
+                            </div>
+                            <button
+                              className="btn yellow small"
+                              onClick={() => {
+                                setAssets(
+                                  assets.map((a) => (a.id === asset.id ? { ...a, status: 'resolved' } : a))
+                                );
+                                showToast('התקלה סומנה כטופלה בהצלחה');
+                              }}
+                            >
+                              אשר כטופל / סגור אירוע
+                            </button>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Admin View */
+          <div className="admin-wrap">
+            <aside className="sidebar">
+              <div
+                className={`s-item ${adminTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setAdminTab('dashboard')}
               >
-                התחבר
-              </button>
-            </form>
-          </div>
-        )}
-
-        {activeTab === 'admin' && isAdminAuthenticated && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-3xl w-full text-right`}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-[#F5B700]">🛠️ לוח ניהול מערכת</h2>
-              <span className="bg-green-600/20 text-green-400 px-3 py-1 rounded text-xs font-bold border border-green-600/30">מחובר כמנהל</span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-4 rounded-xl border border-zinc-700 text-center`}>
-                <div className="text-2xl font-bold text-[#F5B700]">12</div>
-                <div className="text-xs opacity-70">בדיקות שבוצעו השבוע</div>
+                📊 לוח בקרה ראשי
               </div>
-              <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-4 rounded-xl border border-zinc-700 text-center`}>
-                <div className="text-2xl font-bold text-red-500">3</div>
-                <div className="text-xs opacity-70">תקלות פתוחות לטיפול</div>
-              </div>
-              <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-4 rounded-xl border border-zinc-700 text-center`}>
-                <div className="text-2xl font-bold text-green-500">92%</div>
-                <div className="text-xs opacity-70">ציון עמידה בתקן</div>
-              </div>
-            </div>
-
-            <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-6 rounded-xl border border-zinc-700 mb-6`}>
-              <h3 className="font-bold mb-3 text-lg">ניהול אזורי בדיקה והגדרות</h3>
-              <p className="text-sm opacity-70 mb-4">כאן ניתן להוסיף אזורים חדשים במפעל או לעדכן את השאלונים המחזוריים.</p>
-              <button 
-                onClick={() => alert('הפעולה בוצעה בהצלחה')}
-                className="px-4 py-2 bg-[#F5B700] text-[#1C1F22] font-bold rounded-lg hover:bg-yellow-500 transition text-sm"
+              <div
+                className={`s-item ${adminTab === 'assets' ? 'active' : ''}`}
+                onClick={() => setAdminTab('assets')}
               >
-                + הוסף אזור בדיקה חדש
-              </button>
+                🗂️ ניהול נכסים
+              </div>
+              <div
+                className={`s-item ${adminTab === 'categories' ? 'active' : ''}`}
+                onClick={() => setAdminTab('categories')}
+              >
+                ⚙️ קטגוריות ותדירות
+              </div>
+              <div
+                className={`s-item ${adminTab === 'export' ? 'active' : ''}`}
+                onClick={() => setAdminTab('export')}
+              >
+                📥 דוחות וייצוא נתונים
+              </div>
+            </aside>
+            <div className="admin-content">
+              {adminTab === 'dashboard' && (
+                <>
+                  <h2 className="page-title">לוח בקרה ניהולי</h2>
+                  <p className="page-sub">סקירה כללית של מצב הבטיחות, ביצועים והתרעות מערכת.</p>
+
+                  <div className="cards-row">
+                    <div className="prog-card">
+                      <div className="cat-name">סך נכסים במערכת</div>
+                      <div className="cat-num">{assets.length}</div>
+                    </div>
+                    <div className="prog-card">
+                      <div className="cat-name">נכסים תקינים</div>
+                      <div className="cat-num" style={{ color: 'var(--green)' }}>
+                        {assets.filter((a) => a.status === 'pass').length}
+                      </div>
+                    </div>
+                    <div className="prog-card">
+                      <div className="cat-name">תקלות פתוחות</div>
+                      <div className="cat-num" style={{ color: 'var(--red)' }}>
+                        {assets.filter((a) => a.status === 'fail').length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {assets.some((a) => a.status === 'fail') && (
+                    <div className="alert-panel">
+                      <div className="alert-head">
+                        <div className="alert-title-wrap">
+                          <span className="alert-badge">
+                            {assets.filter((a) => a.status === 'fail').length}
+                          </span>
+                          <h3>תקלות פעילות הדורשות טיפול מיידי</h3>
+                        </div>
+                      </div>
+                      <div className="cycle-alert-list">
+                        {assets
+                          .filter((a) => a.status === 'fail')
+                          .map((a) => (
+                            <div key={a.id} className="cycle-alert-row">
+                              <span>
+                                <b>{a.name}</b> ({a.location})
+                              </span>
+                              <button
+                                className="btn small yellow"
+                                onClick={() => {
+                                  setAssets(
+                                    assets.map((item) => (item.id === a.id ? { ...item, status: 'resolved' } : item))
+                                  );
+                                  showToast('התקלה סומנה כטופלה');
+                                }}
+                              >
+                                סמן כטופל
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {adminTab === 'assets' && (
+                <>
+                  <div className="section-head">
+                    <div>
+                      <h2 className="page-title">ניהול נכסים ופריטים</h2>
+                      <p className="page-sub" style={{ margin: 0 }}>הוספה, עריכה ומעקב אחר כלל רכיבי הבטיחות.</p>
+                    </div>
+                    <div className="asset-search-wrap">
+                      <input
+                        type="text"
+                        className="asset-search-input"
+                        placeholder="חיפוש נכס לפי שם או מזהה..."
+                        value={assetSearch}
+                        onChange={(e) => setAssetSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>מזהה</th>
+                          <th>שם הנכס</th>
+                          <th>קטגוריה</th>
+                          <th>מיקום</th>
+                          <th>סטטוס אחרון</th>
+                          <th>פעולות</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assets
+                          .filter(
+                            (a) =>
+                              a.name.toLowerCase().includes(assetSearch.toLowerCase()) ||
+                              a.id.toLowerCase().includes(assetSearch.toLowerCase())
+                          )
+                          .map((asset) => (
+                            <tr key={asset.id} className="clickable-row" onClick={() => setModalAsset(asset)}>
+                              <td className="mono-cell">{asset.id}</td>
+                              <td><b>{asset.name}</b></td>
+                              <td>{categories[asset.category]?.name}</td>
+                              <td>{asset.location}</td>
+                              <td>
+                                <span className={`badge st-${asset.status}`}>
+                                  {asset.status === 'pending' && 'ממתין'}
+                                  {asset.status === 'pass' && 'תקין'}
+                                  {asset.status === 'fail' && 'תקול'}
+                                  {asset.status === 'resolved' && 'טופל'}
+                                </span>
+                              </td>
+                              <td>
+                                <button
+                                  className="btn small danger-o"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAssets(assets.filter((item) => item.id !== asset.id));
+                                    showToast('הנכס הוסר בהצלחה');
+                                  }}
+                                >
+                                  מחק
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {adminTab === 'categories' && (
+                <>
+                  <h2 className="page-title">הגדרת קטגוריות ותדירויות</h2>
+                  <p className="page-sub">ניהול תדירות הביקורות הנדרשות לכל תחום במשק הבית.</p>
+                  <div className="cat-list">
+                    {Object.entries(categories).map(([key, cat]) => (
+                      <div key={key} className="cat-card">
+                        <div className="cat-row" style={{ border: 'none', margin: 0, padding: 0 }}>
+                          <div className="c-left">
+                            <b>
+                              {cat.icon} {cat.name}
+                            </b>
+                            <div className="mono">מזהה: {key}</div>
+                          </div>
+                          <select
+                            className="freq-select"
+                            value={cat.freq}
+                            onChange={(e) =>
+                              setCategories({
+                                ...categories,
+                                [key]: { ...cat, freq: e.target.value as any },
+                              })
+                            }
+                          >
+                            <option value="daily">יומי</option>
+                            <option value="weekly">שבועי</option>
+                            <option value="monthly">חודשי</option>
+                            <option value="quarterly">רבעוני</option>
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {adminTab === 'export' && (
+                <>
+                  <h2 className="page-title">דוחות וייצוא נתונים</h2>
+                  <p className="page-sub">הפקת דוחות בטיחות מלאים בפורמטים שונים לצורכי תיעוד ובקרה.</p>
+                  <div className="export-row">
+                    <div className="export-card">
+                      <div className="ex-title">דוח נתונים מלא (CSV)</div>
+                      <p>ייצוא כלל נתוני הנכסים והסטטוסים לקובץ טבלאי.</p>
+                      <button
+                        className="btn yellow"
+                        onClick={() => showToast('הדוח הופק והורד בהצלחה!')}
+                      >
+                        הורד קובץ CSV
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
-
-        {/* 4. מסך מפקח */}
-        {activeTab === 'viewer' && (
-          <div className={`${isDarkMode ? 'bg-[#24282C] border-[#2E3338]' : 'bg-white border-zinc-200'} border p-8 rounded-2xl shadow-2xl max-w-2xl w-full text-right`}>
-            <h2 className="text-2xl font-bold mb-4 text-[#F5B700]">🕵️‍♂️ תצוגת מפקח (צפייה בלבד)</h2>
-            <p className="opacity-70 mb-6">מבט על סטטוס הבטיחות העדכני בכלל חלקי המפעל.</p>
-            
-            <div className="flex flex-col gap-3">
-              <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-4 rounded-xl border border-zinc-700 flex justify-between items-center`}>
-                <div>
-                  <h4 className="font-bold">קו ייצור 1</h4>
-                  <p className="text-xs opacity-60">נבדק היום ב-08:30 ע"י יוסי</p>
-                </div>
-                <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded text-xs font-bold">תקין לחלוטין</span>
-              </div>
-
-              <div className={`${isDarkMode ? 'bg-[#1C1F22]' : 'bg-zinc-100'} p-4 rounded-xl border border-zinc-700 flex justify-between items-center`}>
-                <div>
-                  <h4 className="font-bold">מחסן מרכזי</h4>
-                  <p className="text-xs opacity-60">נבדק אתמול ב-14:15 ע"י דני</p>
-                </div>
-                <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded text-xs font-bold">דורש מעקב (תקלה פתוחה)</span>
-              </div>
-            </div>
-          </div>
-        )}
-
       </main>
+
+      {/* Modal View for Asset Details */}
+      {modalAsset && (
+        <div className="modal-backdrop" onClick={() => setModalAsset(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <span className="modal-eyebrow mono">{modalAsset.id}</span>
+                <h3>{modalAsset.name}</h3>
+              </div>
+              <button className="modal-close" onClick={() => setModalAsset(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="modal-meta">
+              <div>מיקום: {modalAsset.location}</div>
+              <div>סטטוס: {modalAsset.status}</div>
+            </div>
+            <div className="modal-comment">
+              <b>הערות אחרונות:</b> הנכס נבדק ונמצא תחת מעקב שוטף של צוות משק הבית.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className={`toast show ${toastMessage.isFail ? 'fail-toast' : ''}`}>
+          <span>{toastMessage.isFail ? '⚠️' : '✓'}</span>
+          <span>{toastMessage.text}</span>
+        </div>
+      )}
     </div>
   );
 }
