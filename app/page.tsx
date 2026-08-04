@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// --- Types & Interfaces ---
 type CategoryKey = 'electricity' | 'fire' | 'hazmat' | 'infrastructure' | 'firstaid';
 
 interface CategoryConfig {
@@ -19,22 +18,15 @@ interface Asset {
   status: 'pending' | 'pass' | 'fail' | 'resolved';
   lastChecked?: string;
   inspector?: string;
-  checklist?: { text: string; done: boolean; photo?: string }[];
-  comment?: string;
 }
 
 interface GeneralObservation {
   id: string;
   name: string;
   status: 'open' | 'met';
-  date?: string;
-  inspector?: string;
-  comment?: string;
-  photo?: string;
 }
 
 export default function HouseholdSafetyApp() {
-  // --- States ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [lang, setLang] = useState<'he' | 'en'>('he');
   const [viewMode, setViewMode] = useState<'field' | 'admin'>('field');
@@ -44,22 +36,12 @@ export default function HouseholdSafetyApp() {
   const [showPass, setShowPass] = useState(false);
   const [adminTab, setAdminTab] = useState<'dashboard' | 'assets' | 'categories' | 'export'>('dashboard');
 
-  // Worker flow states inside the field view
-  const [workerName, setWorkerName] = useState('');
-  const [inspectorName, setInspectorName] = useState('');
   const [currentFolder, setCurrentFolder] = useState<CategoryKey | 'observations' | null>(null);
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
-  const [scanMode, setScanMode] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; isFail?: boolean } | null>(null);
-
-  // Modal drill-down state in admin
   const [modalAsset, setModalAsset] = useState<Asset | null>(null);
-
-  // Asset search & filtering in admin
   const [assetSearch, setAssetSearch] = useState('');
 
-  // --- Mock Data ---
   const [categories, setCategories] = useState<Record<CategoryKey, CategoryConfig>>({
     electricity: { name: 'לוחות חשמל ותשתיות', freq: 'weekly', icon: '⚡' },
     fire: { name: 'ציוד כיבוי אש', freq: 'monthly', icon: '🧯' },
@@ -84,7 +66,6 @@ export default function HouseholdSafetyApp() {
     { id: 'OBS-03', name: 'שילוט מילוט נראה וברור', status: 'open' },
   ]);
 
-  // Handle Theme Attribute on HTML/Body
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
@@ -107,344 +88,220 @@ export default function HouseholdSafetyApp() {
   };
 
   return (
-    <div id="app">
+    <div dir="rtl" style={{ fontFamily: 'Heebo, sans-serif', background: theme === 'dark' ? '#15171A' : '#EDEDE9', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22', minHeight: '100vh', transition: 'background 0.2s, color 0.2s' }}>
       {/* Top Navigation Bar */}
-      <header className="topbar">
-        <div className="brand">
-          <span className="eyebrow">HOUSEHOLD SAFETY · V1.0</span>
-          <h1>מעקב בטיחות משק בית</h1>
+      <header style={{ background: '#1C1F22', color: '#EDEDE9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: '10px', letterSpacing: '0.06em', color: '#F5B700' }}>משק בית · מעקב בטיחות</span>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>מערכת ניהול ובקרה</h1>
         </div>
-        <div className="topbar-right">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {viewMode === 'field' && landingRole !== 'select' && (
             <button
-              className="topbar-home-btn"
-              onClick={() => {
-                setLandingRole('select');
-                setCurrentFolder(null);
-                setActiveAsset(null);
-              }}
+              onClick={() => { setLandingRole('select'); setCurrentFolder(null); setActiveAsset(null); }}
+              style={{ background: 'transparent', border: '1px solid #3A4046', color: '#8B9096', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
             >
-              ← חזרה לתפריט ראשי
+              ← חזרה לתפריט
             </button>
           )}
-          <div className="mode-toggle">
+          <div style={{ display: 'flex', background: '#24282C', border: '1px solid #3A4046', borderRadius: '4px', overflow: 'hidden' }}>
             <button
-              className={viewMode === 'field' ? 'active' : ''}
               onClick={() => setViewMode('field')}
+              style={{ padding: '8px 16px', background: viewMode === 'field' ? '#F5B700' : 'transparent', color: viewMode === 'field' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer' }}
             >
               שטח (עובד)
             </button>
             <button
-              className={viewMode === 'admin' ? 'active' : ''}
               onClick={() => setViewMode('admin')}
+              style={{ padding: '8px 16px', background: viewMode === 'admin' ? '#F5B700' : 'transparent', color: viewMode === 'admin' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer' }}
             >
-              ניהול (מנהל)
+              ניהול
             </button>
           </div>
           <button
-            className="theme-toggle-btn"
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            title="החלף ערכת נושא"
+            style={{ background: '#24282C', border: '1px solid #3A4046', color: '#EDEDE9', width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
-          <select
-            className="lang-select"
-            value={lang}
-            onChange={(e) => setLang(e.target.value as 'he' | 'en')}
-          >
-            <option value="he">HE</option>
-            <option value="en">EN</option>
-          </select>
         </div>
       </header>
-      <div className="hazard"></div>
+      <div style={{ height: '6px', background: 'repeating-linear-gradient(45deg, #F5B700 0 10px, #1C1F22 10px 20px)' }}></div>
 
-      <main>
+      <main style={{ padding: '24px 16px', maxWidth: '1200px', margin: '0 auto' }}>
         {viewMode === 'field' ? (
-          <div className="field-wrap">
-            <div className="phone">
-              <div className="phone-screen">
-                {/* Landing & Roles selection */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '420px', background: '#24282C', borderRadius: '24px', padding: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+              <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', borderRadius: '16px', minHeight: '600px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                
+                {/* Landing Roles */}
                 {landingRole === 'select' && (
-                  <div className="landing-wrap" style={{ minHeight: 'auto', padding: '24px 16px' }}>
-                    <div className="landing-card" style={{ boxShadow: 'none', border: 'none', background: 'transparent', padding: 0 }}>
-                      <span className="landing-eyebrow">בחר את תפקידך לכניסה למערכת</span>
-                      <div className="landing-buttons">
-                        <button
-                          className="landing-btn field"
-                          onClick={() => setLandingRole('worker')}
-                        >
-                          <span className="landing-icon">👷‍♂️</span>
-                          <span className="landing-title">בדיקות שטח / משתמש</span>
-                          <span className="landing-sub">ביצוע ביקורות ותיעוד משק בית</span>
-                        </button>
-                        <button
-                          className="landing-btn supervisor"
-                          onClick={() => setLandingRole('supervisor')}
-                        >
-                          <span className="landing-icon">🛡️</span>
-                          <span className="landing-title">מנהל אירועים / אחראי</span>
-                          <span className="landing-sub">סקירת תקלות פתוחות ואישור מענים</span>
-                        </button>
-                        <button
-                          className="landing-btn admin"
-                          onClick={() => setLandingRole('admin-lock')}
-                        >
-                          <span className="landing-icon">⚙️</span>
-                          <span className="landing-title">הנהלה וניהול מערכת</span>
-                          <span className="landing-sub">צפייה بدוחות, הגדרות וניהול נכסים</span>
-                        </button>
-                      </div>
+                  <div style={{ padding: '24px', textAlign: 'center' }}>
+                    <div style={{ display: 'inline-block', background: '#F5B700', color: '#1C1F22', padding: '8px 18px', borderRadius: '20px', fontWeight: 700, marginBottom: '20px' }}>
+                      בחר תפקיד לכניסה למערכת
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <button
+                        onClick={() => setLandingRole('worker')}
+                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #C99200', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                      >
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>👷‍♂️ בדיקות שטח / משתמש</div>
+                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>ביצוע ביקורות ותיעוד שוטף</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('supervisor')}
+                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #3A6EA5', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                      >
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>🛡️ מנהל אירועים / אחראי</div>
+                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>סקירת תקלות פתוחות ואישור מענים</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('admin-lock')}
+                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #1C1F22', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                      >
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>⚙️ הנהלה וניהול מערכת</div>
+                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>דוחות והגדרות מערכת מתקדמות</div>
+                      </button>
                     </div>
                   </div>
                 )}
 
+                {/* Admin Password Lock inside Phone View */}
                 {landingRole === 'admin-lock' && (
-                  <div className="landing-wrap" style={{ minHeight: 'auto', padding: '24px 16px' }}>
-                    <div className="landing-card lock-card">
-                      <div className="lock-title">כניסת מנהל מערכת</div>
-                      <form onSubmit={handleAdminLogin}>
-                        <div className="lock-input-wrap">
-                          <input
-                            type={showPass ? 'text' : 'password'}
-                            className="lock-input mono"
-                            placeholder="••••"
-                            maxLength={6}
-                            value={adminPass}
-                            onChange={(e) => setAdminPass(e.target.value)}
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            className="lock-eye-btn"
-                            onClick={() => setShowPass(!showPass)}
-                          >
-                            {showPass ? '👁️' : '👁️‍🗨️'}
-                          </button>
-                        </div>
-                        {adminError && <div className="lock-error">{adminError}</div>}
-                        <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                          <button type="submit" className="submit-btn" style={{ flex: 1, padding: '10px' }}>
-                            כניסה למערכת
-                          </button>
-                          <button
-                            type="button"
-                            className="btn ghost"
-                            onClick={() => { setLandingRole('select'); setAdminError(''); }}
-                          >
-                            ביטול
-                          </button>
-                        </div>
-                      </form>
-                    </div>
+                  <div style={{ padding: '30px 20px', textAlign: 'center' }}>
+                    <h3 style={{ marginBottom: '16px', fontWeight: 800 }}>כניסת מנהל מערכת</h3>
+                    <form onSubmit={handleAdminLogin}>
+                      <div style={{ position: 'relative', marginBottom: '12px' }}>
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          placeholder="••••"
+                          maxLength={6}
+                          value={adminPass}
+                          onChange={(e) => setAdminPass(e.target.value)}
+                          style={{ width: '100%', textAlign: 'center', fontSize: '20px', letterSpacing: '0.2em', padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }}
+                          autoFocus
+                        />
+                      </div>
+                      {adminError && <div style={{ color: '#D64545', fontSize: '12px', marginBottom: '10px', fontWeight: 600 }}>{adminError}</div>}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="submit" style={{ flex: 1, padding: '10px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>כניסה</button>
+                        <button type="button" onClick={() => { setLandingRole('select'); setAdminError(''); }} style={{ padding: '10px', background: 'transparent', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}>ביטול</button>
+                      </div>
+                    </form>
                   </div>
                 )}
 
+                {/* Worker Header & Folders */}
                 {landingRole === 'worker' && (
-                  <div className="field-header">
-                    <div className="field-header-top">
-                      <button className="entry-back-btn" onClick={() => setLandingRole('select')}>
-                        החלף משתמש
-                      </button>
+                  <div style={{ background: '#1C1F22', color: '#fff', padding: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '10px', color: '#F5B700', fontFamily: 'monospace' }}>FIELD INSPECTION</span>
+                      <button onClick={() => setLandingRole('select')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '10px', cursor: 'pointer' }}>החלף משתמש</button>
                     </div>
-                    <span className="eyebrow">FIELD INSPECTION V1.0</span>
-                    <h2>בדיקות בטיחות שוטפות</h2>
-                    <div className="inspector-row">
-                      <span className="inspector-badge">👤 בודק: משתמש משק בית</span>
-                    </div>
+                    <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>בדיקות בטיחות שוטפות</h2>
                   </div>
                 )}
 
-                {landingRole === 'supervisor' && (
-                  <div className="field-header">
-                    <div className="field-header-top">
-                      <button className="entry-back-btn" onClick={() => setLandingRole('select')}>
-                        החלף משתמש
-                      </button>
-                    </div>
-                    <span className="eyebrow">SUPERVISOR DASHBOARD</span>
-                    <h2>סקירת אירועים ותקלות</h2>
-                  </div>
-                )}
-
-                {/* Worker Folders / Assets List */}
                 {landingRole === 'worker' && !currentFolder && !activeAsset && (
-                  <div className="field-body">
-                    <div className="scan-instruction">
-                      בחר קטגוריה לבדיקה או סרוק ברקוד נכס ישירות:
-                    </div>
-                    <div className="folder-grid">
+                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                    <div style={{ fontSize: '12px', color: '#8B9096', textAlign: 'center' }}>בחר קטגוריה לבדיקה:</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       {Object.entries(categories).map(([key, cat]) => {
-                        const catAssets = assets.filter((a) => a.category === key);
-                        const passedCount = catAssets.filter((a) => a.status === 'pass').length;
+                        const count = assets.filter((a) => a.category === key && a.status === 'pass').length;
+                        const total = assets.filter((a) => a.category === key).length;
                         return (
                           <div
                             key={key}
-                            className="folder-tile"
                             onClick={() => setCurrentFolder(key as CategoryKey)}
+                            style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #ddd', borderRadius: '8px', padding: '16px 10px', textAlign: 'center', cursor: 'pointer' }}
                           >
-                            <div className="folder-icon">{cat.icon}</div>
-                            <div className="folder-name">{cat.name}</div>
-                            <div className="folder-count">
-                              {passedCount}/{catAssets.length} בוצעו
-                            </div>
+                            <div style={{ fontSize: '28px', marginBottom: '6px' }}>{cat.icon}</div>
+                            <div style={{ fontSize: '12px', fontWeight: 700 }}>{cat.name}</div>
+                            <div style={{ fontSize: '10px', color: '#8B9096', marginTop: '4px' }}>{count}/{total} בוצעו</div>
                           </div>
                         );
                       })}
                       <div
-                        className="folder-tile obs-folder"
                         onClick={() => setCurrentFolder('observations')}
+                        style={{ gridColumn: '1 / -1', background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #3A6EA5', borderRadius: '8px', padding: '14px', textAlign: 'center', cursor: 'pointer' }}
                       >
-                        <div className="folder-icon">📋</div>
-                        <div className="folder-name">תצפיות בטיחות וכלליות</div>
-                        <div className="folder-count obs-open">
-                          {observations.filter((o) => o.status === 'open').length} תצפיות פתוחות
-                        </div>
+                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>📋</div>
+                        <div style={{ fontSize: '12px', fontWeight: 700 }}>תצפיות בטיחות וכלליות</div>
                       </div>
                     </div>
-                    <button
-                      className="scan-btn"
-                      onClick={() => setScanMode(true)}
-                    >
-                      <span className="dot"></span>
-                      סריקת קוד QR מהירה לנכס
-                    </button>
                   </div>
                 )}
 
-                {/* Inside a Specific Folder */}
+                {/* Inside Category Folder */}
                 {landingRole === 'worker' && currentFolder && currentFolder !== 'observations' && !activeAsset && (
-                  <div className="field-body">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', marginBottom: '10px' }}>
-                      <button className="back-link" onClick={() => setCurrentFolder(null)}>
-                        ← חזרה לקטגוריות
-                      </button>
-                      <span style={{ fontWeight: '700', fontSize: '14px' }}>
-                        {categories[currentFolder as CategoryKey]?.name}
-                      </span>
-                    </div>
-                    <div className="qr-grid">
-                      {assets
-                        .filter((a) => a.category === currentFolder)
-                        .map((asset) => (
-                          <div
-                            key={asset.id}
-                            className="qr-tile"
-                            onClick={() => setActiveAsset(asset)}
-                          >
-                            <div className="qr-code">
-                              <span style={{ fontSize: '24px' }}>{categories[currentFolder as CategoryKey]?.icon}</span>
-                            </div>
-                            <div className="a-name">{asset.name}</div>
-                            <div className="a-id">{asset.id}</div>
-                            <div>
-                              <span className={`a-status st-${asset.status}`}>
-                                {asset.status === 'pending' && 'ממתין לבדיקה'}
-                                {asset.status === 'pass' && 'תקין'}
-                                {asset.status === 'fail' && 'תקול / לטיפול'}
-                                {asset.status === 'resolved' && 'טופל'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה לקטגוריות</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '8px' }}>
+                      {assets.filter((a) => a.category === currentFolder).map((asset) => (
+                        <div
+                          key={asset.id}
+                          onClick={() => setActiveAsset(asset)}
+                          style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #ddd', borderRadius: '8px', padding: '12px', textAlign: 'center', cursor: 'pointer' }}
+                        >
+                          <div style={{ fontSize: '11px', fontWeight: 700 }}>{asset.name}</div>
+                          <div style={{ fontSize: '9px', color: '#8B9096', fontFamily: 'monospace', margin: '4px 0' }}>{asset.id}</div>
+                          <span style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '10px', background: asset.status === 'pass' ? '#E7F2EA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : '#8a6d1f' }}>
+                            {asset.status === 'pass' ? 'תקין' : 'ממתין לבדיקה'}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* General Observations Folder View */}
+                {/* Observations View */}
                 {landingRole === 'worker' && currentFolder === 'observations' && (
-                  <div className="field-body">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <button className="back-link" onClick={() => setCurrentFolder(null)}>
-                        ← חזרה
-                      </button>
-                      <span style={{ fontWeight: '700', fontSize: '14px' }}>תצפיות בטיחות</span>
-                    </div>
-                    <div className="obs-progress-banner">
-                      דווח על ממצאים או ודא תקינות סביבתית שוטפת במשק הבית.
-                    </div>
-                    <div className="obs-recent-section">
-                      {observations.map((obs) => (
-                        <div key={obs.id} className="obs-recent-row">
-                          <span className="obs-recent-name">{obs.name}</span>
-                          <button
-                            className={`btn small ${obs.status === 'met' ? 'yellow' : ''}`}
-                            onClick={() => {
-                              setObservations(
-                                observations.map((o) =>
-                                  o.id === obs.id
-                                    ? { ...o, status: o.status === 'open' ? 'met' : 'open' }
-                                    : o
-                                )
-                              );
-                              showToast('סטטוס תצפית עודכן בהצלחה');
-                            }}
-                          >
-                            {obs.status === 'open' ? 'סמן כבוצע' : 'פתוח מחדש'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה</button>
+                    {observations.map((obs) => (
+                      <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '10px', borderRadius: '6px', fontSize: '12px' }}>
+                        <span>{obs.name}</span>
+                        <button
+                          onClick={() => {
+                            setObservations(observations.map(o => o.id === obs.id ? { ...o, status: o.status === 'open' ? 'met' : 'open' } : o));
+                            showToast('סטטוס תצפית עודכן');
+                          }}
+                          style={{ padding: '4px 8px', fontSize: '10px', background: obs.status === 'met' ? '#4C9A66' : '#1C1F22', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          {obs.status === 'open' ? 'סמן כבוצע' : 'פתוח מחדש'}
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Asset Inspection Form */}
+                {/* Active Asset Check Form */}
                 {landingRole === 'worker' && activeAsset && (
-                  <div className="field-body">
-                    <button className="back-link" onClick={() => setActiveAsset(null)}>
-                      ← חזרה לרשימת נכסים
-                    </button>
-                    <div className="asset-card">
-                      <span className="a-type mono">{activeAsset.id}</span>
-                      <h3>{activeAsset.name}</h3>
-                      <div className="asset-meta">
-                        <div>
-                          <span className="k">מיקום:</span> <span>{activeAsset.location}</span>
-                        </div>
-                      </div>
+                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button onClick={() => setActiveAsset(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה לרשימה</button>
+                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '12px', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '10px', color: '#C99200', fontFamily: 'monospace' }}>{activeAsset.id}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{activeAsset.name}</div>
+                      <div style={{ fontSize: '11px', color: '#8B9096', marginTop: '4px' }}>מיקום: {activeAsset.location}</div>
                     </div>
-
-                    <div className="checklist-box">
-                      <div className="checklist-head">
-                        <span style={{ fontSize: '12px', fontWeight: '700' }}>רשימת תיוג לבדיקה:</span>
-                        <span className="checklist-count">3 סעיפים</span>
-                      </div>
-                      {['שלמות פיזית ומבנית של הציוד', 'אין חסימות גישה או סכנת מעידה סביבו', 'שילוט אזהרה או תוקף בתוקף'].map((chkText, idx) => (
-                        <label key={idx} className="check-row">
-                          <input type="checkbox" defaultChecked />
-                          <div className="check-box">✓</div>
-                          <div className="check-text">{chkText}</div>
-                        </label>
-                      ))}
-                    </div>
-
-                    <div className="pf-row">
+                    <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
                       <button
-                        className="pf-btn pass sel"
                         onClick={() => {
-                          setAssets(
-                            assets.map((a) =>
-                              a.id === activeAsset.id ? { ...a, status: 'pass', lastChecked: new Date().toLocaleDateString() } : a
-                            )
-                          );
-                          showToast('הבדיקה עודכנה כתקינה בהצלחה!');
+                          setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'pass' } : a));
+                          showToast('הבדיקה עודכנה כתקינה!');
                           setActiveAsset(null);
                         }}
+                        style={{ flex: 1, padding: '12px', background: '#4C9A66', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
                       >
                         ✓ תקין לחלוטין
                       </button>
                       <button
-                        className="pf-btn fail"
                         onClick={() => {
-                          setAssets(
-                            assets.map((a) =>
-                              a.id === activeAsset.id ? { ...a, status: 'fail', lastChecked: new Date().toLocaleDateString() } : a
-                            )
-                          );
-                          showToast('דווחה תקלה בהצלחה למערכת', true);
+                          setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'fail' } : a));
+                          showToast('דווחה תקלה!', true);
                           setActiveAsset(null);
                         }}
+                        style={{ flex: 1, padding: '12px', background: '#D64545', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
                       >
                         ⚠️ נמצאה תקלה
                       </button>
@@ -454,293 +311,119 @@ export default function HouseholdSafetyApp() {
 
                 {/* Supervisor View */}
                 {landingRole === 'supervisor' && (
-                  <div className="field-body">
-                    <div className="obs-progress-banner" style={{ background: 'var(--surface)', border: '1px solid var(--line-light)' }}>
-                      מרכז בקרה למנהל: מעקב אחר תקלות פתוחות ואישור מענים ממשק הבית.
-                    </div>
-                    {assets.filter((a) => a.status === 'fail').length === 0 ? (
-                      <div className="empty-state">אין תקלות פתוחות הדורשות טיפול כרגע. הכל תקין!</div>
+                  <div style={{ padding: '16px', flex: 1 }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>תקלות פתוחות לטיפול</h3>
+                    {assets.filter(a => a.status === 'fail').length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#8B9096', padding: '30px', fontSize: '12px' }}>אין תקלות פתוחות כרגע. הכל תקין!</div>
                     ) : (
-                      assets
-                        .filter((a) => a.status === 'fail')
-                        .map((asset) => (
-                          <div key={asset.id} className="asset-card" style={{ borderLeft: '4px solid var(--red)' }}>
-                            <span className="a-type mono">{asset.id}</span>
-                            <h3>{asset.name}</h3>
-                            <div className="asset-meta" style={{ marginBottom: '10px' }}>
-                              <div>
-                                <span className="k">מיקום:</span> <span>{asset.location}</span>
-                              </div>
-                            </div>
-                            <button
-                              className="btn yellow small"
-                              onClick={() => {
-                                setAssets(
-                                  assets.map((a) => (a.id === asset.id ? { ...a, status: 'resolved' } : a))
-                                );
-                                showToast('התקלה סומנה כטופלה בהצלחה');
-                              }}
-                            >
-                              אשר כטופל / סגור אירוע
-                            </button>
+                      assets.filter(a => a.status === 'fail').map(a => (
+                        <div key={a.id} style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '10px', borderRadius: '6px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 700 }}>{a.name}</div>
+                            <div style={{ fontSize: '10px', color: '#8B9096' }}>{a.location}</div>
                           </div>
-                        ))
+                          <button
+                            onClick={() => {
+                              setAssets(assets.map(item => item.id === a.id ? { ...item, status: 'resolved' } : item));
+                              showToast('התקלה סומנה כטופלה');
+                            }}
+                            style={{ background: '#F5B700', border: 'none', padding: '6px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            סמן כטופל
+                          </button>
+                        </div>
+                      ))
                     )}
                   </div>
                 )}
+
               </div>
             </div>
           </div>
         ) : (
           /* Admin View */
-          <div className="admin-wrap">
-            <aside className="sidebar">
-              <div
-                className={`s-item ${adminTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setAdminTab('dashboard')}
-              >
-                📊 לוח בקרה ראשי
-              </div>
-              <div
-                className={`s-item ${adminTab === 'assets' ? 'active' : ''}`}
-                onClick={() => setAdminTab('assets')}
-              >
-                🗂️ ניהול נכסים
-              </div>
-              <div
-                className={`s-item ${adminTab === 'categories' ? 'active' : ''}`}
-                onClick={() => setAdminTab('categories')}
-              >
-                ⚙️ קטגוריות ותדירות
-              </div>
-              <div
-                className={`s-item ${adminTab === 'export' ? 'active' : ''}`}
-                onClick={() => setAdminTab('export')}
-              >
-                📥 דוחות וייצוא נתונים
-              </div>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <aside style={{ width: '220px', background: '#1C1F22', color: '#fff', borderRadius: '8px', padding: '12px 0', flexShrink: '0' }}>
+              <div onClick={() => setAdminTab('dashboard')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'dashboard' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>📊 לוח בקרה ראשי</div>
+              <div onClick={() => setAdminTab('assets')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'assets' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>🗂️ ניהול נכסים</div>
+              <div onClick={() => setAdminTab('categories')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'categories' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>⚙️ קטגוריות ותדירות</div>
+              <div onClick={() => setAdminTab('export')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'export' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>📥 דוחות וייצוא נתונים</div>
             </aside>
-            <div className="admin-content">
+            <div style={{ flex: 1, background: theme === 'dark' ? '#20242A' : '#fff', padding: '24px', borderRadius: '8px', border: '1px solid #ddd' }}>
               {adminTab === 'dashboard' && (
-                <>
-                  <h2 className="page-title">לוח בקרה ניהולי</h2>
-                  <p className="page-sub">סקירה כללית של מצב הבטיחות, ביצועים והתרעות מערכת.</p>
-
-                  <div className="cards-row">
-                    <div className="prog-card">
-                      <div className="cat-name">סך נכסים במערכת</div>
-                      <div className="cat-num">{assets.length}</div>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>לוח בקרה ניהולי</h2>
+                  <p style={{ color: '#8B9096', fontSize: '12px', marginBottom: '20px' }}>סקירה כללית של מצב הבטיחות במשק הבית.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700 }}>סך נכסים</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px' }}>{assets.length}</div>
                     </div>
-                    <div className="prog-card">
-                      <div className="cat-name">נכסים תקינים</div>
-                      <div className="cat-num" style={{ color: 'var(--green)' }}>
-                        {assets.filter((a) => a.status === 'pass').length}
-                      </div>
+                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#4C9A66' }}>תקינים</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px', color: '#4C9A66' }}>{assets.filter(a => a.status === 'pass').length}</div>
                     </div>
-                    <div className="prog-card">
-                      <div className="cat-name">תקלות פתוחות</div>
-                      <div className="cat-num" style={{ color: 'var(--red)' }}>
-                        {assets.filter((a) => a.status === 'fail').length}
-                      </div>
+                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#D64545' }}>תקלות פתוחות</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px', color: '#D64545' }}>{assets.filter(a => a.status === 'fail').length}</div>
                     </div>
                   </div>
-
-                  {assets.some((a) => a.status === 'fail') && (
-                    <div className="alert-panel">
-                      <div className="alert-head">
-                        <div className="alert-title-wrap">
-                          <span className="alert-badge">
-                            {assets.filter((a) => a.status === 'fail').length}
-                          </span>
-                          <h3>תקלות פעילות הדורשות טיפול מיידי</h3>
-                        </div>
-                      </div>
-                      <div className="cycle-alert-list">
-                        {assets
-                          .filter((a) => a.status === 'fail')
-                          .map((a) => (
-                            <div key={a.id} className="cycle-alert-row">
-                              <span>
-                                <b>{a.name}</b> ({a.location})
-                              </span>
-                              <button
-                                className="btn small yellow"
-                                onClick={() => {
-                                  setAssets(
-                                    assets.map((item) => (item.id === a.id ? { ...item, status: 'resolved' } : item))
-                                  );
-                                  showToast('התקלה סומנה כטופלה');
-                                }}
-                              >
-                                סמן כטופל
-                              </button>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </>
+                </div>
               )}
 
               {adminTab === 'assets' && (
-                <>
-                  <div className="section-head">
-                    <div>
-                      <h2 className="page-title">ניהול נכסים ופריטים</h2>
-                      <p className="page-sub" style={{ margin: 0 }}>הוספה, עריכה ומעקב אחר כלל רכיבי הבטיחות.</p>
-                    </div>
-                    <div className="asset-search-wrap">
-                      <input
-                        type="text"
-                        className="asset-search-input"
-                        placeholder="חיפוש נכס לפי שם או מזהה..."
-                        value={assetSearch}
-                        onChange={(e) => setAssetSearch(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>מזהה</th>
-                          <th>שם הנכס</th>
-                          <th>קטגוריה</th>
-                          <th>מיקום</th>
-                          <th>סטטוס אחרון</th>
-                          <th>פעולות</th>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>ניהול נכסים</h2>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: '#EDEDE9', textAlign: 'right' }}>
+                        <th style={{ padding: '8px' }}>מזהה</th>
+                        <th style={{ padding: '8px' }}>שם הנכס</th>
+                        <th style={{ padding: '8px' }}>מיקום</th>
+                        <th style={{ padding: '8px' }}>סטטוס</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assets.map(asset => (
+                        <tr key={asset.id} style={{ borderBottom: '1px solid #ddd' }}>
+                          <td style={{ padding: '8px', fontFamily: 'monospace' }}>{asset.id}</td>
+                          <td style={{ padding: '8px', fontWeight: 600 }}>{asset.name}</td>
+                          <td style={{ padding: '8px' }}>{asset.location}</td>
+                          <td style={{ padding: '8px' }}>{asset.status}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {assets
-                          .filter(
-                            (a) =>
-                              a.name.toLowerCase().includes(assetSearch.toLowerCase()) ||
-                              a.id.toLowerCase().includes(assetSearch.toLowerCase())
-                          )
-                          .map((asset) => (
-                            <tr key={asset.id} className="clickable-row" onClick={() => setModalAsset(asset)}>
-                              <td className="mono-cell">{asset.id}</td>
-                              <td><b>{asset.name}</b></td>
-                              <td>{categories[asset.category]?.name}</td>
-                              <td>{asset.location}</td>
-                              <td>
-                                <span className={`badge st-${asset.status}`}>
-                                  {asset.status === 'pending' && 'ממתין'}
-                                  {asset.status === 'pass' && 'תקין'}
-                                  {asset.status === 'fail' && 'תקול'}
-                                  {asset.status === 'resolved' && 'טופל'}
-                                </span>
-                              </td>
-                              <td>
-                                <button
-                                  className="btn small danger-o"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAssets(assets.filter((item) => item.id !== asset.id));
-                                    showToast('הנכס הוסר בהצלחה');
-                                  }}
-                                >
-                                  מחק
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
               {adminTab === 'categories' && (
-                <>
-                  <h2 className="page-title">הגדרת קטגוריות ותדירויות</h2>
-                  <p className="page-sub">ניהול תדירות הביקורות הנדרשות לכל תחום במשק הבית.</p>
-                  <div className="cat-list">
-                    {Object.entries(categories).map(([key, cat]) => (
-                      <div key={key} className="cat-card">
-                        <div className="cat-row" style={{ border: 'none', margin: 0, padding: 0 }}>
-                          <div className="c-left">
-                            <b>
-                              {cat.icon} {cat.name}
-                            </b>
-                            <div className="mono">מזהה: {key}</div>
-                          </div>
-                          <select
-                            className="freq-select"
-                            value={cat.freq}
-                            onChange={(e) =>
-                              setCategories({
-                                ...categories,
-                                [key]: { ...cat, freq: e.target.value as any },
-                              })
-                            }
-                          >
-                            <option value="daily">יומי</option>
-                            <option value="weekly">שבועי</option>
-                            <option value="monthly">חודשי</option>
-                            <option value="quarterly">רבעוני</option>
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>הגדרת קטגוריות</h2>
+                  {Object.entries(categories).map(([key, cat]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #ddd', fontSize: '13px' }}>
+                      <span>{cat.icon} {cat.name}</span>
+                      <span style={{ fontWeight: 700, color: '#F5B700' }}>{cat.freq}</span>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {adminTab === 'export' && (
-                <>
-                  <h2 className="page-title">דוחות וייצוא נתונים</h2>
-                  <p className="page-sub">הפקת דוחות בטיחות מלאים בפורמטים שונים לצורכי תיעוד ובקרה.</p>
-                  <div className="export-row">
-                    <div className="export-card">
-                      <div className="ex-title">דוח נתונים מלא (CSV)</div>
-                      <p>ייצוא כלל נתוני הנכסים והסטטוסים לקובץ טבלאי.</p>
-                      <button
-                        className="btn yellow"
-                        onClick={() => showToast('הדוח הופק והורד בהצלחה!')}
-                      >
-                        הורד קובץ CSV
-                      </button>
-                    </div>
-                  </div>
-                </>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>ייצוא נתונים</h2>
+                  <button onClick={() => showToast('הדוח הורד בהצלחה')} style={{ background: '#F5B700', border: 'none', padding: '10px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>הורד קובץ CSV</button>
+                </div>
               )}
             </div>
           </div>
         )}
       </main>
 
-      {/* Modal View for Asset Details */}
-      {modalAsset && (
-        <div className="modal-backdrop" onClick={() => setModalAsset(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <div>
-                <span className="modal-eyebrow mono">{modalAsset.id}</span>
-                <h3>{modalAsset.name}</h3>
-              </div>
-              <button className="modal-close" onClick={() => setModalAsset(null)}>
-                ✕
-              </button>
-            </div>
-            <div className="modal-meta">
-              <div>מיקום: {modalAsset.location}</div>
-              <div>סטטוס: {modalAsset.status}</div>
-            </div>
-            <div className="modal-comment">
-              <b>הערות אחרונות:</b> הנכס נבדק ונמצא תחת מעקב שוטף של צוות משק הבית.
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Toast Notification */}
       {toastMessage && (
-        <div className={`toast show ${toastMessage.isFail ? 'fail-toast' : ''}`}>
-          <span>{toastMessage.isFail ? '⚠️' : '✓'}</span>
-          <span>{toastMessage.text}</span>
+        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1C1F22', color: '#fff', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', borderRight: `4px solid ${toastMessage.isFail ? '#D64545' : '#4C9A66'}`, zIndex: 1000 }}>
+          {toastMessage.text}
         </div>
       )}
     </div>
