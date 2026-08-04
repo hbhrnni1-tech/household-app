@@ -28,7 +28,6 @@ interface GeneralObservation {
 
 export default function HouseholdSafetyApp() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [lang, setLang] = useState<'he' | 'en'>('he');
   const [viewMode, setViewMode] = useState<'field' | 'admin'>('field');
   const [landingRole, setLandingRole] = useState<'select' | 'worker' | 'admin-lock' | 'supervisor'>('select');
   const [adminPass, setAdminPass] = useState('');
@@ -39,7 +38,6 @@ export default function HouseholdSafetyApp() {
   const [currentFolder, setCurrentFolder] = useState<CategoryKey | 'observations' | null>(null);
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; isFail?: boolean } | null>(null);
-  const [modalAsset, setModalAsset] = useState<Asset | null>(null);
   const [assetSearch, setAssetSearch] = useState('');
 
   const [categories, setCategories] = useState<Record<CategoryKey, CategoryConfig>>({
@@ -88,7 +86,10 @@ export default function HouseholdSafetyApp() {
   };
 
   return (
-    <div dir="rtl" style={{ fontFamily: 'Heebo, sans-serif', background: theme === 'dark' ? '#15171A' : '#EDEDE9', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22', minHeight: '100vh', transition: 'background 0.2s, color 0.2s' }}>
+    <div dir="rtl" style={{ fontFamily: 'Heebo, sans-serif', minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme === 'dark' ? '#15171A' : '#EDEDE9', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22', transition: 'background 0.2s, color 0.2s' }}>
+      {/* Hazard Strip */}
+      <div style={{ height: '6px', background: 'repeating-linear-gradient(45deg, #F5B700 0 10px, #1C1F22 10px 20px)' }}></div>
+
       {/* Top Navigation Bar */}
       <header style={{ background: '#1C1F22', color: '#EDEDE9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -99,113 +100,122 @@ export default function HouseholdSafetyApp() {
           {viewMode === 'field' && landingRole !== 'select' && (
             <button
               onClick={() => { setLandingRole('select'); setCurrentFolder(null); setActiveAsset(null); }}
-              style={{ background: 'transparent', border: '1px solid #3A4046', color: '#8B9096', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+              style={{ background: 'transparent', border: '1px solid #3A4046', color: '#8B9096', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '11.5px' }}
             >
               ← חזרה לתפריט
             </button>
           )}
-          <div style={{ display: 'flex', background: '#24282C', border: '1px solid #3A4046', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', background: '#24282C', border: '1px solid #3A4046', borderRadius: '3px', overflow: 'hidden' }}>
             <button
               onClick={() => setViewMode('field')}
-              style={{ padding: '8px 16px', background: viewMode === 'field' ? '#F5B700' : 'transparent', color: viewMode === 'field' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '9px 18px', background: viewMode === 'field' ? '#F5B700' : 'transparent', color: viewMode === 'field' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
             >
               שטח (עובד)
             </button>
             <button
               onClick={() => setViewMode('admin')}
-              style={{ padding: '8px 16px', background: viewMode === 'admin' ? '#F5B700' : 'transparent', color: viewMode === 'admin' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '9px 18px', background: viewMode === 'admin' ? '#F5B700' : 'transparent', color: viewMode === 'admin' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
             >
               ניהול
             </button>
           </div>
           <button
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            style={{ background: '#24282C', border: '1px solid #3A4046', color: '#EDEDE9', width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ background: '#24282C', border: '1px solid #3A4046', color: '#EDEDE9', width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px' }}
           >
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
         </div>
       </header>
-      <div style={{ height: '6px', background: 'repeating-linear-gradient(45deg, #F5B700 0 10px, #1C1F22 10px 20px)' }}></div>
 
-      <main style={{ padding: '24px 16px', maxWidth: '1200px', margin: '0 auto' }}>
+      <main style={{ flex: 1 }}>
         {viewMode === 'field' ? (
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{ width: '420px', background: '#24282C', borderRadius: '24px', padding: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-              <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', borderRadius: '16px', minHeight: '600px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '36px 16px 60px' }}>
+            <div style={{ width: '390px', maxWidth: '100%', background: '#24282C', borderRadius: '26px', padding: '10px', boxShadow: '0 30px 60px -20px rgba(0,0,0,0.45)' }}>
+              <div style={{ background: theme === 'dark' ? '#262B32' : '#fff', borderRadius: '18px', minHeight: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 
                 {/* Landing Roles */}
                 {landingRole === 'select' && (
-                  <div style={{ padding: '24px', textAlign: 'center' }}>
-                    <div style={{ display: 'inline-block', background: '#F5B700', color: '#1C1F22', padding: '8px 18px', borderRadius: '20px', fontWeight: 700, marginBottom: '20px' }}>
+                  <div style={{ padding: '32px 28px', textAlign: 'center', margin: 'auto' }}>
+                    <div style={{ display: 'inline-block', fontWeight: 700, fontSize: '14px', color: '#1C1F22', background: '#F5B700', padding: '8px 18px', borderRadius: '20px', marginBottom: '22px' }}>
                       בחר תפקיד לכניסה למערכת
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       <button
                         onClick={() => setLandingRole('worker')}
-                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #C99200', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #C99200', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <div style={{ fontWeight: 800, fontSize: '15px' }}>👷‍♂️ בדיקות שטח / משתמש</div>
-                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>ביצוע ביקורות ותיעוד שוטף</div>
+                        <span style={{ fontSize: '30px' }}>👷‍♂️</span>
+                        <div style={{ fontWeight: 800, fontSize: '16px' }}>בדיקות שטח / משתמש</div>
+                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>ביצוע ביקורות ותיעוד שוטף</div>
                       </button>
                       <button
                         onClick={() => setLandingRole('supervisor')}
-                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #3A6EA5', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #3A6EA5', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <div style={{ fontWeight: 800, fontSize: '15px' }}>🛡️ מנהל אירועים / אחראי</div>
-                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>סקירת תקלות פתוחות ואישור מענים</div>
+                        <span style={{ fontSize: '30px' }}>🛡️</span>
+                        <div style={{ fontWeight: 800, fontSize: '16px' }}>מנהל אירועים / אחראי</div>
+                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>סקירת תקלות פתוחות ואישור מענים</div>
                       </button>
                       <button
                         onClick={() => setLandingRole('admin-lock')}
-                        style={{ padding: '18px', borderRadius: '10px', border: '2px solid #1C1F22', background: 'transparent', cursor: 'pointer', textAlign: 'right' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #1C1F22', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <div style={{ fontWeight: 800, fontSize: '15px' }}>⚙️ הנהלה וניהול מערכת</div>
-                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '4px' }}>דוחות והגדרות מערכת מתקדמות</div>
+                        <span style={{ fontSize: '30px' }}>⚙️</span>
+                        <div style={{ fontWeight: 800, fontSize: '16px' }}>הנהלה וניהול מערכת</div>
+                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>דוחות והגדרות מערכת מתקדמות</div>
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Admin Password Lock inside Phone View */}
+                {/* Admin Password Lock */}
                 {landingRole === 'admin-lock' && (
-                  <div style={{ padding: '30px 20px', textAlign: 'center' }}>
-                    <h3 style={{ marginBottom: '16px', fontWeight: 800 }}>כניסת מנהל מערכת</h3>
+                  <div style={{ padding: '36px 28px', textAlign: 'center', margin: 'auto' }}>
+                    <h3 style={{ fontWeight: 800, fontSize: '19px', marginBottom: '18px' }}>כניסת מנהל מערכת</h3>
                     <form onSubmit={handleAdminLogin}>
-                      <div style={{ position: 'relative', marginBottom: '12px' }}>
+                      <div style={{ position: 'relative', marginBottom: '10px' }}>
                         <input
                           type={showPass ? 'text' : 'password'}
                           placeholder="••••"
                           maxLength={6}
                           value={adminPass}
                           onChange={(e) => setAdminPass(e.target.value)}
-                          style={{ width: '100%', textAlign: 'center', fontSize: '20px', letterSpacing: '0.2em', padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }}
+                          style={{ width: '100%', textAlign: 'center', fontSize: '22px', letterSpacing: '0.3em', padding: '14px 44px', border: '2px solid #D8D6CE', borderRadius: '10px', fontFamily: 'monospace', background: theme === 'dark' ? '#20242A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                           autoFocus
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(!showPass)}
+                          style={{ position: 'absolute', top: '50%', left: '8px', transform: 'translateY(-50%)', background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '6px' }}
+                        >
+                          👁️
+                        </button>
                       </div>
-                      {adminError && <div style={{ color: '#D64545', fontSize: '12px', marginBottom: '10px', fontWeight: 600 }}>{adminError}</div>}
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button type="submit" style={{ flex: 1, padding: '10px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>כניסה</button>
-                        <button type="button" onClick={() => { setLandingRole('select'); setAdminError(''); }} style={{ padding: '10px', background: 'transparent', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}>ביטול</button>
+                      {adminError && <div style={{ color: '#D64545', fontSize: '12.5px', fontWeight: 600, marginBottom: '10px' }}>{adminError}</div>}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                        <button type="submit" style={{ flex: 1, padding: '12px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>אישור</button>
+                        <button type="button" onClick={() => { setLandingRole('select'); setAdminError(''); }} style={{ padding: '12px', background: 'transparent', border: '1.5px solid #D8D6CE', borderRadius: '8px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
                       </div>
                     </form>
                   </div>
                 )}
 
-                {/* Worker Header & Folders */}
+                {/* Worker Header & Categories */}
                 {landingRole === 'worker' && (
-                  <div style={{ background: '#1C1F22', color: '#fff', padding: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '10px', color: '#F5B700', fontFamily: 'monospace' }}>FIELD INSPECTION</span>
-                      <button onClick={() => setLandingRole('select')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '10px', cursor: 'pointer' }}>החלף משתמש</button>
+                  <div style={{ background: '#1C1F22', color: '#EDEDE9', padding: '16px 18px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                      <button onClick={() => setLandingRole('select')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #3A4046', color: '#b8bcc1', fontSize: '10.5px', padding: '5px 12px', borderRadius: '14px', cursor: 'pointer' }}>החלף משתמש</button>
                     </div>
-                    <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>בדיקות בטיחות שוטפות</h2>
+                    <span style={{ fontFamily: 'monospace', fontSize: '9px', letterSpacing: '0.08em', color: '#F5B700' }}>FIELD INSPECTION</span>
+                    <h2 style={{ fontWeight: 700, fontSize: '17px', margin: '2px 0 0' }}>בדיקות בטיחות שוטפות</h2>
                   </div>
                 )}
 
                 {landingRole === 'worker' && !currentFolder && !activeAsset && (
-                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
-                    <div style={{ fontSize: '12px', color: '#8B9096', textAlign: 'center' }}>בחר קטגוריה לבדיקה:</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+                    <div style={{ fontSize: '12px', color: '#8B9096', textAlign: 'center' }}>בחר קטגוריה לבדיקה בשטח:</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       {Object.entries(categories).map(([key, cat]) => {
                         const count = assets.filter((a) => a.category === key && a.status === 'pass').length;
                         const total = assets.filter((a) => a.category === key).length;
@@ -213,20 +223,20 @@ export default function HouseholdSafetyApp() {
                           <div
                             key={key}
                             onClick={() => setCurrentFolder(key as CategoryKey)}
-                            style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #ddd', borderRadius: '8px', padding: '16px 10px', textAlign: 'center', cursor: 'pointer' }}
+                            style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1.5px solid #D8D6CE', borderRadius: '10px', padding: '20px 12px', textAlign: 'center', cursor: 'pointer' }}
                           >
-                            <div style={{ fontSize: '28px', marginBottom: '6px' }}>{cat.icon}</div>
-                            <div style={{ fontSize: '12px', fontWeight: 700 }}>{cat.name}</div>
-                            <div style={{ fontSize: '10px', color: '#8B9096', marginTop: '4px' }}>{count}/{total} בוצעו</div>
+                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>{cat.icon}</div>
+                            <div style={{ fontSize: '12.5px', fontWeight: 700 }}>{cat.name}</div>
+                            <div style={{ fontSize: '10.5px', color: '#8B9096', marginTop: '4px' }}>{count}/{total} בוצעו</div>
                           </div>
                         );
                       })}
                       <div
                         onClick={() => setCurrentFolder('observations')}
-                        style={{ gridColumn: '1 / -1', background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #3A6EA5', borderRadius: '8px', padding: '14px', textAlign: 'center', cursor: 'pointer' }}
+                        style={{ gridColumn: '1 / -1', background: theme === 'dark' ? '#20242A' : '#fff', border: '1.5px solid #3A6EA5', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer' }}
                       >
-                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>📋</div>
-                        <div style={{ fontSize: '12px', fontWeight: 700 }}>תצפיות בטיחות וכלליות</div>
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>📋</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700 }}>תצפיות בטיחות וכלליות</div>
                       </div>
                     </div>
                   </div>
@@ -234,19 +244,19 @@ export default function HouseholdSafetyApp() {
 
                 {/* Inside Category Folder */}
                 {landingRole === 'worker' && currentFolder && currentFolder !== 'observations' && !activeAsset && (
-                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה לקטגוריות</button>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '8px' }}>
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה לקטגוריות</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       {assets.filter((a) => a.category === currentFolder).map((asset) => (
                         <div
                           key={asset.id}
                           onClick={() => setActiveAsset(asset)}
-                          style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', border: '1px solid #ddd', borderRadius: '8px', padding: '12px', textAlign: 'center', cursor: 'pointer' }}
+                          style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '12px', textAlign: 'center', cursor: 'pointer' }}
                         >
-                          <div style={{ fontSize: '11px', fontWeight: 700 }}>{asset.name}</div>
-                          <div style={{ fontSize: '9px', color: '#8B9096', fontFamily: 'monospace', margin: '4px 0' }}>{asset.id}</div>
-                          <span style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '10px', background: asset.status === 'pass' ? '#E7F2EA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : '#8a6d1f' }}>
-                            {asset.status === 'pass' ? 'תקין' : 'ממתין לבדיקה'}
+                          <div style={{ fontSize: '12px', fontWeight: 600 }}>{asset.name}</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '9.5px', color: '#8B9096', margin: '2px 0 6px' }}>{asset.id}</div>
+                          <span style={{ fontSize: '10px', padding: '2px 9px', borderRadius: '20px', background: asset.status === 'pass' ? '#E7F2EA' : asset.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : asset.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
+                            {asset.status === 'pass' ? 'תקין' : asset.status === 'fail' ? 'תקלה' : 'ממתין'}
                           </span>
                         </div>
                       ))}
@@ -256,17 +266,17 @@ export default function HouseholdSafetyApp() {
 
                 {/* Observations View */}
                 {landingRole === 'worker' && currentFolder === 'observations' && (
-                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה</button>
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה</button>
                     {observations.map((obs) => (
-                      <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '10px', borderRadius: '6px', fontSize: '12px' }}>
+                      <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', padding: '12px', borderRadius: '8px', fontSize: '12.5px', border: '1px solid #D8D6CE' }}>
                         <span>{obs.name}</span>
                         <button
                           onClick={() => {
                             setObservations(observations.map(o => o.id === obs.id ? { ...o, status: o.status === 'open' ? 'met' : 'open' } : o));
                             showToast('סטטוס תצפית עודכן');
                           }}
-                          style={{ padding: '4px 8px', fontSize: '10px', background: obs.status === 'met' ? '#4C9A66' : '#1C1F22', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                          style={{ padding: '6px 10px', fontSize: '11px', background: obs.status === 'met' ? '#4C9A66' : '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
                         >
                           {obs.status === 'open' ? 'סמן כבוצע' : 'פתוח מחדש'}
                         </button>
@@ -277,21 +287,21 @@ export default function HouseholdSafetyApp() {
 
                 {/* Active Asset Check Form */}
                 {landingRole === 'worker' && activeAsset && (
-                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <button onClick={() => setActiveAsset(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px' }}>← חזרה לרשימה</button>
-                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '12px', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '10px', color: '#C99200', fontFamily: 'monospace' }}>{activeAsset.id}</div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{activeAsset.name}</div>
-                      <div style={{ fontSize: '11px', color: '#8B9096', marginTop: '4px' }}>מיקום: {activeAsset.location}</div>
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <button onClick={() => setActiveAsset(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה לרשימה</button>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px', borderRadius: '8px', border: '1.5px solid #D8D6CE' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: '9.5px', color: '#C99200' }}>{activeAsset.id}</div>
+                      <div style={{ fontWeight: '700', fontSize: '18px', marginTop: '3px' }}>{activeAsset.name}</div>
+                      <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '6px' }}>מיקום: {activeAsset.location}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
                       <button
                         onClick={() => {
                           setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'pass' } : a));
-                          showToast('הבדיקה עודכנה כתקינה!');
+                          showToast('הנכס סומן כתקין!');
                           setActiveAsset(null);
                         }}
-                        style={{ flex: 1, padding: '12px', background: '#4C9A66', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '14px', background: '#4C9A66', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
                       >
                         ✓ תקין לחלוטין
                       </button>
@@ -301,7 +311,7 @@ export default function HouseholdSafetyApp() {
                           showToast('דווחה תקלה!', true);
                           setActiveAsset(null);
                         }}
-                        style={{ flex: 1, padding: '12px', background: '#D64545', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '14px', background: '#D64545', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
                       >
                         ⚠️ נמצאה תקלה
                       </button>
@@ -311,23 +321,23 @@ export default function HouseholdSafetyApp() {
 
                 {/* Supervisor View */}
                 {landingRole === 'supervisor' && (
-                  <div style={{ padding: '16px', flex: 1 }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>תקלות פתוחות לטיפול</h3>
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <h3 style={{ fontSize: '15.5px', fontWeight: 700, marginBottom: '6px' }}>תקלות פתוחות לטיפול</h3>
                     {assets.filter(a => a.status === 'fail').length === 0 ? (
-                      <div style={{ textAlign: 'center', color: '#8B9096', padding: '30px', fontSize: '12px' }}>אין תקלות פתוחות כרגע. הכל תקין!</div>
+                      <div style={{ textAlign: 'center', color: '#8B9096', padding: '40px 20px', fontSize: '13px' }}>אין תקלות פתוחות כרגע. הכל תקין!</div>
                     ) : (
                       assets.filter(a => a.status === 'fail').map(a => (
-                        <div key={a.id} style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '10px', borderRadius: '6px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={a.id} style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #D64545', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: 700 }}>{a.name}</div>
-                            <div style={{ fontSize: '10px', color: '#8B9096' }}>{a.location}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</div>
+                            <div style={{ fontSize: '11px', color: '#8B9096' }}>{a.location}</div>
                           </div>
                           <button
                             onClick={() => {
                               setAssets(assets.map(item => item.id === a.id ? { ...item, status: 'resolved' } : item));
                               showToast('התקלה סומנה כטופלה');
                             }}
-                            style={{ background: '#F5B700', border: 'none', padding: '6px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                            style={{ background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', color: '#1C1F22' }}
                           >
                             סמן כטופל
                           </button>
@@ -342,30 +352,30 @@ export default function HouseholdSafetyApp() {
           </div>
         ) : (
           /* Admin View */
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <aside style={{ width: '220px', background: '#1C1F22', color: '#fff', borderRadius: '8px', padding: '12px 0', flexShrink: '0' }}>
-              <div onClick={() => setAdminTab('dashboard')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'dashboard' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>📊 לוח בקרה ראשי</div>
-              <div onClick={() => setAdminTab('assets')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'assets' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>🗂️ ניהול נכסים</div>
-              <div onClick={() => setAdminTab('categories')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'categories' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>⚙️ קטגוריות ותדירות</div>
-              <div onClick={() => setAdminTab('export')} style={{ padding: '10px 16px', cursor: 'pointer', background: adminTab === 'export' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13px' }}>📥 דוחות וייצוא נתונים</div>
+          <div style={{ display: 'flex', minHeight: 'calc(100vh - 58px)' }}>
+            <aside style={{ width: '200px', background: '#1C1F22', color: '#EDEDE9', flexShrink: 0, padding: '18px 0' }}>
+              <div onClick={() => setAdminTab('dashboard')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'dashboard' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'dashboard' ? '3px solid #F5B700' : '3px solid transparent' }}>📊 לוח בקרה ראשי</div>
+              <div onClick={() => setAdminTab('assets')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'assets' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'assets' ? '3px solid #F5B700' : '3px solid transparent' }}>🗂️ ניהול נכסים</div>
+              <div onClick={() => setAdminTab('categories')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'categories' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'categories' ? '3px solid #F5B700' : '3px solid transparent' }}>⚙️ קטגוריות ותדירות</div>
+              <div onClick={() => setAdminTab('export')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'export' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'export' ? '3px solid #F5B700' : '3px solid transparent' }}>📥 דוחות וייצוא נתונים</div>
             </aside>
-            <div style={{ flex: 1, background: theme === 'dark' ? '#20242A' : '#fff', padding: '24px', borderRadius: '8px', border: '1px solid #ddd' }}>
+            <div style={{ flex: 1, padding: '28px 32px 60px', maxWidth: '1180px' }}>
               {adminTab === 'dashboard' && (
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>לוח בקרה ניהולי</h2>
-                  <p style={{ color: '#8B9096', fontSize: '12px', marginBottom: '20px' }}>סקירה כללית של מצב הבטיחות במשק הבית.</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700 }}>סך נכסים</div>
-                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px' }}>{assets.length}</div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>לוח בקרה ניהולי</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>סקירה כללית של מצב הבטיחות במשק הבית.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px', marginBottom: '30px' }}>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700 }}>סך נכסים במערכת</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px' }}>{assets.length}</div>
                     </div>
-                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#4C9A66' }}>תקינים</div>
-                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px', color: '#4C9A66' }}>{assets.filter(a => a.status === 'pass').length}</div>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#4C9A66' }}>נכסים תקינים</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px', color: '#4C9A66' }}>{assets.filter(a => a.status === 'pass').length}</div>
                     </div>
-                    <div style={{ background: theme === 'dark' ? '#262B32' : '#f9f9f9', padding: '16px', borderRadius: '8px', border: '1px solid #ddd' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#D64545' }}>תקלות פתוחות</div>
-                      <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '8px', color: '#D64545' }}>{assets.filter(a => a.status === 'fail').length}</div>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#D64545' }}>תקלות פתוחות</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px', color: '#D64545' }}>{assets.filter(a => a.status === 'fail').length}</div>
                     </div>
                   </div>
                 </div>
@@ -373,46 +383,57 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'assets' && (
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>ניהול נכסים</h2>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                      <tr style={{ background: '#EDEDE9', textAlign: 'right' }}>
-                        <th style={{ padding: '8px' }}>מזהה</th>
-                        <th style={{ padding: '8px' }}>שם הנכס</th>
-                        <th style={{ padding: '8px' }}>מיקום</th>
-                        <th style={{ padding: '8px' }}>סטטוס</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assets.map(asset => (
-                        <tr key={asset.id} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td style={{ padding: '8px', fontFamily: 'monospace' }}>{asset.id}</td>
-                          <td style={{ padding: '8px', fontWeight: 600 }}>{asset.name}</td>
-                          <td style={{ padding: '8px' }}>{asset.location}</td>
-                          <td style={{ padding: '8px' }}>{asset.status}</td>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ניהול נכסים</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>רשימת כל הנכסים והציוד המפוקח.</p>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '6px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: theme === 'dark' ? '#262B32' : '#EDEDE9', textAlign: 'right' }}>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מזהה</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>שם הנכס</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מיקום</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>סטטוס</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {assets.map(asset => (
+                          <tr key={asset.id} style={{ borderBottom: '1px solid #EEEDE7' }}>
+                            <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: '12px', direction: 'ltr', textAlign: 'right' }}>{asset.id}</td>
+                            <td style={{ padding: '10px 12px', fontWeight: 600, fontSize: '13px' }}>{asset.name}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>{asset.location}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>
+                              <span style={{ padding: '3px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: asset.status === 'pass' ? '#E7F2EA' : asset.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : asset.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
+                                {asset.status === 'pass' ? 'תקין' : asset.status === 'fail' ? 'תקלה' : 'ממתין'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
               {adminTab === 'categories' && (
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>הגדרת קטגוריות</h2>
-                  {Object.entries(categories).map(([key, cat]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #ddd', fontSize: '13px' }}>
-                      <span>{cat.icon} {cat.name}</span>
-                      <span style={{ fontWeight: 700, color: '#F5B700' }}>{cat.freq}</span>
-                    </div>
-                  ))}
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>הגדרת קטגוריות</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>ניהול תדירות ועצי קטגוריות הבדיקה.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {Object.entries(categories).map(([key, cat]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '14px 16px', fontSize: '13.5px' }}>
+                        <span style={{ fontWeight: 700 }}>{cat.icon} {cat.name}</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#C99200', background: '#FFF9E9', padding: '4px 10px', borderRadius: '6px' }}>{cat.freq}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {adminTab === 'export' && (
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>ייצוא נתונים</h2>
-                  <button onClick={() => showToast('הדוח הורד בהצלחה')} style={{ background: '#F5B700', border: 'none', padding: '10px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>הורד קובץ CSV</button>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ייצוא נתונים</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13.5px', marginBottom: '22px' }}>הפקת דוחות וייצוא נתוני מערכת לקבצים חיצוניים.</p>
+                  <button onClick={() => showToast('הדוח הופק והורד בהצלחה')} style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '11px 20px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>הורד קובץ נתונים (CSV)</button>
                 </div>
               )}
             </div>
@@ -422,7 +443,7 @@ export default function HouseholdSafetyApp() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: '#1C1F22', color: '#fff', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', borderRight: `4px solid ${toastMessage.isFail ? '#D64545' : '#4C9A66'}`, zIndex: 1000 }}>
+        <div style={{ position: 'fixed', bottom: '26px', left: '50%', transform: 'translateX(-50%)', background: '#1C1F22', color: '#EDEDE9', padding: '12px 20px', borderRadius: '8px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.5)', zIndex: 1000, borderRight: `4px solid ${toastMessage.isFail ? '#D64545' : '#4C9A66'}` }}>
           {toastMessage.text}
         </div>
       )}
