@@ -20,6 +20,13 @@ interface Asset {
   inspector?: string;
 }
 
+interface LogEntry {
+  id: string;
+  time: string;
+  text: string;
+  type: 'pass' | 'fail' | 'system' | 'add';
+}
+
 interface GeneralObservation {
   id: string;
   name: string;
@@ -29,16 +36,25 @@ interface GeneralObservation {
 export default function HouseholdSafetyApp() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [viewMode, setViewMode] = useState<'field' | 'admin'>('field');
-  const [landingRole, setLandingRole] = useState<'select' | 'worker' | 'admin-lock' | 'supervisor'>('select');
+  const [landingRole, setLandingRole] = useState<'select' | 'worker' | 'admin-lock' | 'supervisor' | 'qr'>('select');
   const [adminPass, setAdminPass] = useState('');
   const [adminError, setAdminError] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [adminTab, setAdminTab] = useState<'dashboard' | 'assets' | 'categories' | 'export'>('dashboard');
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'assets' | 'categories' | 'logs' | 'export'>('dashboard');
 
   const [currentFolder, setCurrentFolder] = useState<CategoryKey | 'observations' | null>(null);
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; isFail?: boolean } | null>(null);
-  const [assetSearch, setAssetSearch] = useState('');
+  
+  // New Asset Form State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetId, setNewAssetId] = useState('');
+  const [newAssetCat, setNewAssetCat] = useState<CategoryKey>('electricity');
+  const [newAssetLoc, setNewAssetLoc] = useState('');
+
+  // QR Simulation Input
+  const [qrInputCode, setQrInputCode] = useState('');
 
   const [categories, setCategories] = useState<Record<CategoryKey, CategoryConfig>>({
     electricity: { name: 'לוחות חשמל ותשתיות', freq: 'weekly', icon: '⚡' },
@@ -64,6 +80,10 @@ export default function HouseholdSafetyApp() {
     { id: 'OBS-03', name: 'שילוט מילוט נראה וברור', status: 'open' },
   ]);
 
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { id: 'LOG-1', time: '08:30', text: 'אתחול מערכת בטיחות', type: 'system' }
+  ]);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
@@ -73,6 +93,11 @@ export default function HouseholdSafetyApp() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const addLog = (text: string, type: LogEntry['type']) => {
+    const timeStr = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    setLogs(prev => [{ id: 'L-' + Date.now(), time: timeStr, text, type }, ...prev]);
+  };
+
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminPass === '1234' || adminPass === 'admin') {
@@ -80,8 +105,44 @@ export default function HouseholdSafetyApp() {
       setLandingRole('select');
       setAdminPass('');
       setAdminError('');
+      addLog('התחברות מנהל מערכת הצליחה', 'system');
     } else {
       setAdminError('סיסמה שגויה. נסה שוב (ברירת מחדל: 1234)');
+    }
+  };
+
+  const handleCreateAsset = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAssetName || !newAssetId) {
+      showToast('נא למלא את כל השדות החובה', true);
+      return;
+    }
+    const newAsset: Asset = {
+      id: newAssetId,
+      name: newAssetName,
+      category: newAssetCat,
+      location: newAssetLoc || 'לא מוגדר',
+      status: 'pending'
+    };
+    setAssets([...assets, newAsset]);
+    addLog(`נוסף נכס חדש: ${newAssetName} (${newAssetId})`, 'add');
+    setShowAddModal(false);
+    setNewAssetName('');
+    setNewAssetId('');
+    setNewAssetLoc('');
+    showToast('הנכס נוסף בהצלחה!');
+  };
+
+  const handleQrScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const found = assets.find(a => a.id.toLowerCase() === qrInputCode.trim().toLowerCase());
+    if (found) {
+      setActiveAsset(found);
+      setLandingRole('worker');
+      setQrInputCode('');
+      showToast(`זוהה נכס: ${found.name}`);
+    } else {
+      showToast('נכס לא נמצא במערכת לפי מזהה זה', true);
     }
   };
 
@@ -143,29 +204,62 @@ export default function HouseholdSafetyApp() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       <button
                         onClick={() => setLandingRole('worker')}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #C99200', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #C99200', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <span style={{ fontSize: '30px' }}>👷‍♂️</span>
-                        <div style={{ fontWeight: 800, fontSize: '16px' }}>בדיקות שטח / משתמש</div>
-                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>ביצוע ביקורות ותיעוד שוטף</div>
+                        <span style={{ fontSize: '26px' }}>👷‍♂️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>בדיקות שטח / משתמש</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>ביצוע ביקורות ותיעוד שוטף</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('qr')}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #4C9A66', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      >
+                        <span style={{ fontSize: '26px' }}>📷</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>סריקת קוד QR לנכס</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>פתיחת בדיקה מהירה באמצעות ברקוד</div>
                       </button>
                       <button
                         onClick={() => setLandingRole('supervisor')}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #3A6EA5', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #3A6EA5', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <span style={{ fontSize: '30px' }}>🛡️</span>
-                        <div style={{ fontWeight: 800, fontSize: '16px' }}>מנהל אירועים / אחראי</div>
-                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>סקירת תקלות פתוחות ואישור מענים</div>
+                        <span style={{ fontSize: '26px' }}>🛡️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>מנהל אירועים / אחראי</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>סקירת תקלות פתוחות ואישור מענים</div>
                       </button>
                       <button
                         onClick={() => setLandingRole('admin-lock')}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '22px 16px', borderRadius: '12px', border: '2px solid #1C1F22', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #1C1F22', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
                       >
-                        <span style={{ fontSize: '30px' }}>⚙️</span>
-                        <div style={{ fontWeight: 800, fontSize: '16px' }}>הנהלה וניהול מערכת</div>
-                        <div style={{ fontSize: '11.5px', color: '#8B9096' }}>דוחות והגדרות מערכת מתקדמות</div>
+                        <span style={{ fontSize: '26px' }}>⚙️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>הנהלה וניהול מערכת</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>דוחות והגדרות מערכת מתקדמות</div>
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* QR Simulation Screen */}
+                {landingRole === 'qr' && (
+                  <div style={{ padding: '32px 28px', textAlign: 'center', margin: 'auto', width: '100%' }}>
+                    <h3 style={{ fontWeight: 800, fontSize: '18px', marginBottom: '8px' }}>סורק קוד QR</h3>
+                    <p style={{ fontSize: '12px', color: '#8B9096', marginBottom: '20px' }}>צלם את הקוד על גבי הנכס או הקלד את מזהה הנכס (לדוגמה: EL-01)</p>
+                    <div style={{ border: '2px dashed #C99200', borderRadius: '12px', padding: '24px', marginBottom: '20px', background: theme === 'dark' ? '#20242A' : '#FAFAFA' }}>
+                      <div style={{ fontSize: '40px', marginBottom: '10px' }}>📷</div>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#C99200' }}>מכוון מצלמה אל הברקוד...</div>
+                    </div>
+                    <form onSubmit={handleQrScanSubmit}>
+                      <input
+                        type="text"
+                        placeholder="הקלד מזהה נכס (לדוגמה: EL-01)"
+                        value={qrInputCode}
+                        onChange={(e) => setQrInputCode(e.target.value)}
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #D8D6CE', marginBottom: '12px', textAlign: 'center', fontSize: '13px', background: theme === 'dark' ? '#20242A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="submit" style={{ flex: 1, padding: '11px', background: '#F5B700', color: '#1C1F22', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>אתר נכס</button>
+                        <button type="button" onClick={() => setLandingRole('select')} style={{ padding: '11px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '8px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+                      </div>
+                    </form>
                   </div>
                 )}
 
@@ -275,6 +369,7 @@ export default function HouseholdSafetyApp() {
                           onClick={() => {
                             setObservations(observations.map(o => o.id === obs.id ? { ...o, status: o.status === 'open' ? 'met' : 'open' } : o));
                             showToast('סטטוס תצפית עודכן');
+                            addLog(`תצפית ${obs.id} עודכנה לסטטוס ${obs.status === 'open' ? 'בוצע' : 'פתוח'}`, 'pass');
                           }}
                           style={{ padding: '6px 10px', fontSize: '11px', background: obs.status === 'met' ? '#4C9A66' : '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
                         >
@@ -299,6 +394,7 @@ export default function HouseholdSafetyApp() {
                         onClick={() => {
                           setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'pass' } : a));
                           showToast('הנכס סומן כתקין!');
+                          addLog(`נכס ${activeAsset.name} (${activeAsset.id}) סומן כתקין`, 'pass');
                           setActiveAsset(null);
                         }}
                         style={{ flex: 1, padding: '14px', background: '#4C9A66', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
@@ -309,6 +405,7 @@ export default function HouseholdSafetyApp() {
                         onClick={() => {
                           setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'fail' } : a));
                           showToast('דווחה תקלה!', true);
+                          addLog(`נמצאה תקלה בנכס ${activeAsset.name} (${activeAsset.id})`, 'fail');
                           setActiveAsset(null);
                         }}
                         style={{ flex: 1, padding: '14px', background: '#D64545', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
@@ -336,6 +433,7 @@ export default function HouseholdSafetyApp() {
                             onClick={() => {
                               setAssets(assets.map(item => item.id === a.id ? { ...item, status: 'resolved' } : item));
                               showToast('התקלה סומנה כטופלה');
+                              addLog(`תקלה בנכס ${a.name} טופלה`, 'pass');
                             }}
                             style={{ background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', color: '#1C1F22' }}
                           >
@@ -357,6 +455,7 @@ export default function HouseholdSafetyApp() {
               <div onClick={() => setAdminTab('dashboard')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'dashboard' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'dashboard' ? '3px solid #F5B700' : '3px solid transparent' }}>📊 לוח בקרה ראשי</div>
               <div onClick={() => setAdminTab('assets')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'assets' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'assets' ? '3px solid #F5B700' : '3px solid transparent' }}>🗂️ ניהול נכסים</div>
               <div onClick={() => setAdminTab('categories')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'categories' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'categories' ? '3px solid #F5B700' : '3px solid transparent' }}>⚙️ קטגוריות ותדירות</div>
+              <div onClick={() => setAdminTab('logs')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'logs' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'logs' ? '3px solid #F5B700' : '3px solid transparent' }}>📜 יומן אירועים</div>
               <div onClick={() => setAdminTab('export')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'export' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'export' ? '3px solid #F5B700' : '3px solid transparent' }}>📥 דוחות וייצוא נתונים</div>
             </aside>
             <div style={{ flex: 1, padding: '28px 32px 60px', maxWidth: '1180px' }}>
@@ -383,8 +482,51 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'assets' && (
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ניהול נכסים</h2>
-                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>רשימת כל הנכסים והציוד המפוקח.</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
+                    <div>
+                      <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ניהול נכסים</h2>
+                      <p style={{ color: '#8B9096', fontSize: '13px' }}>רשימת כל הנכסים והציוד המפוקח.</p>
+                    </div>
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+                    >
+                      + הוסף נכס חדש
+                    </button>
+                  </div>
+
+                  {showAddModal && (
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '20px', borderRadius: '10px', border: '1.5px solid #F5B700', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>הוספת נכס חדש למערכת</h3>
+                      <form onSubmit={handleCreateAsset} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>שם הנכס</label>
+                          <input type="text" placeholder="לדוגמה: לוח חשמל קומה 2" value={newAssetName} onChange={e => setNewAssetName(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מזהה ייחודי (ID)</label>
+                          <input type="text" placeholder="לדוגמה: EL-03" value={newAssetId} onChange={e => setNewAssetId(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>קטגוריה</label>
+                          <select value={newAssetCat} onChange={e => setNewAssetCat(e.target.value as CategoryKey)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>
+                            {Object.entries(categories).map(([k, c]) => (
+                              <option key={k} value={k}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מיקום</label>
+                          <input type="text" placeholder="לדוגמה: מרתף" value={newAssetLoc} onChange={e => setNewAssetLoc(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px', marginTop: '8px' }}>
+                          <button type="submit" style={{ padding: '10px 18px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>שמור נכס</button>
+                          <button type="button" onClick={() => setShowAddModal(false)} style={{ padding: '10px 18px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '6px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
                   <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '6px', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
@@ -423,6 +565,21 @@ export default function HouseholdSafetyApp() {
                       <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '14px 16px', fontSize: '13.5px' }}>
                         <span style={{ fontWeight: 700 }}>{cat.icon} {cat.name}</span>
                         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#C99200', background: '#FFF9E9', padding: '4px 10px', borderRadius: '6px' }}>{cat.freq}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {adminTab === 'logs' && (
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>יומן אירועים ופעילות</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>תיעוד שוטף של כלל הפעולות שבוצעו במערכת.</p>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {logs.map(log => (
+                      <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #EEEDE7', fontSize: '12.5px' }}>
+                        <span>{log.text}</span>
+                        <span style={{ fontFamily: 'monospace', color: '#8B9096' }}>{log.time}</span>
                       </div>
                     ))}
                   </div>
