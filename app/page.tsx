@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 export default function Home() {
-  const [currentView,].”use client”; // לית בטחון נשתמש במשתנים סטנדרטיים
   const [activeTab, setActiveTab] = useState('home');
   const [isDarkMode, setIsDarkMode] = useState(true);
 
