@@ -482,70 +482,31 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'assets' && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
-                    <div>
-                      <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ניהול נכסים</h2>
-                      <p style={{ color: '#8B9096', fontSize: '13px' }}>רשימת כל הנכסים והציוד המפוקח.</p>
-                    </div>
-                    <button
-                      onClick={() => setShowAddModal(true)}
-                      style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
-                    >
-                      + הוסף נכס חדש
-                    </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h2 style={{ fontSize: '22px', fontWeight: 800 }}>ניהול נכסים</h2>
+                    <button onClick={() => setShowAddModal(true)} style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>+ הוסף נכס חדש</button>
                   </div>
-
-                  {showAddModal && (
-                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '20px', borderRadius: '10px', border: '1.5px solid #F5B700', marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>הוספת נכס חדש למערכת</h3>
-                      <form onSubmit={handleCreateAsset} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>שם הנכס</label>
-                          <input type="text" placeholder="לדוגמה: לוח חשמל קומה 2" value={newAssetName} onChange={e => setNewAssetName(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מזהה ייחודי (ID)</label>
-                          <input type="text" placeholder="לדוגמה: EL-03" value={newAssetId} onChange={e => setNewAssetId(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>קטגוריה</label>
-                          <select value={newAssetCat} onChange={e => setNewAssetCat(e.target.value as CategoryKey)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>
-                            {Object.entries(categories).map(([k, c]) => (
-                              <option key={k} value={k}>{c.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מיקום</label>
-                          <input type="text" placeholder="לדוגמה: מרתף" value={newAssetLoc} onChange={e => setNewAssetLoc(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
-                        </div>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px', marginTop: '8px' }}>
-                          <button type="submit" style={{ padding: '10px 18px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>שמור נכס</button>
-                          <button type="button" onClick={() => setShowAddModal(false)} style={{ padding: '10px 18px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '6px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
-                        </div>
-                      </form>
-                    </div>
-                  )}
-
-                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '6px', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', borderRadius: '8px', border: '1px solid #D8D6CE', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '13px' }}>
                       <thead>
-                        <tr style={{ background: theme === 'dark' ? '#262B32' : '#EDEDE9', textAlign: 'right' }}>
-                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מזהה</th>
-                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>שם הנכס</th>
-                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מיקום</th>
-                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>סטטוס</th>
+                        <tr style={{ background: theme === 'dark' ? '#262B32' : '#F4F3EE', borderBottom: '1px solid #D8D6CE' }}>
+                          <th style={{ padding: '12px 16px' }}>מזהה</th>
+                          <th style={{ padding: '12px 16px' }}>שם הנכס</th>
+                          <th style={{ padding: '12px 16px' }}>קטגוריה</th>
+                          <th style={{ padding: '12px 16px' }}>מיקום</th>
+                          <th style={{ padding: '12px 16px' }}>סטטוס</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {assets.map(asset => (
-                          <tr key={asset.id} style={{ borderBottom: '1px solid #EEEDE7' }}>
-                            <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: '12px', direction: 'ltr', textAlign: 'right' }}>{asset.id}</td>
-                            <td style={{ padding: '10px 12px', fontWeight: 600, fontSize: '13px' }}>{asset.name}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>{asset.location}</td>
-                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>
-                              <span style={{ padding: '3px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: asset.status === 'pass' ? '#E7F2EA' : asset.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : asset.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
-                                {asset.status === 'pass' ? 'תקין' : asset.status === 'fail' ? 'תקלה' : 'ממתין'}
+                        {assets.map(a => (
+                          <tr key={a.id} style={{ borderBottom: '1px solid #D8D6CE' }}>
+                            <td style={{ padding: '12px 16px', fontFamily: 'monospace' }}>{a.id}</td>
+                            <td style={{ padding: '12px 16px', fontWeight: 600 }}>{a.name}</td>
+                            <td style={{ padding: '12px 16px' }}>{categories[a.category]?.name}</td>
+                            <td style={{ padding: '12px 16px' }}>{a.location}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: '10.5px', padding: '3px 10px', borderRadius: '20px', background: a.status === 'pass' ? '#E7F2EA' : a.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: a.status === 'pass' ? '#4C9A66' : a.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
+                                {a.status === 'pass' ? 'תקין' : a.status === 'fail' ? 'תקלה' : 'ממתין'}
                               </span>
                             </td>
                           </tr>
@@ -558,13 +519,13 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'categories' && (
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>הגדרת קטגוריות</h2>
-                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>ניהול תדירות ועצי קטגוריות הבדיקה.</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px' }}>הגדרת קטגוריות ותדירות בדיקה</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                     {Object.entries(categories).map(([key, cat]) => (
-                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '14px 16px', fontSize: '13.5px' }}>
-                        <span style={{ fontWeight: 700 }}>{cat.icon} {cat.name}</span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#C99200', background: '#FFF9E9', padding: '4px 10px', borderRadius: '6px' }}>{cat.freq}</span>
+                      <div key={key} style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                        <div style={{ fontSize: '28px', marginBottom: '8px' }}>{cat.icon}</div>
+                        <div style={{ fontSize: '15px', fontWeight: 700 }}>{cat.name}</div>
+                        <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '6px' }}>תדירות בדיקה נדרשת: {cat.freq}</div>
                       </div>
                     ))}
                   </div>
@@ -573,13 +534,12 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'logs' && (
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>יומן אירועים ופעילות</h2>
-                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>תיעוד שוטף של כלל הפעולות שבוצעו במערכת.</p>
-                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px' }}>יומן אירועים ומערכת</h2>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', borderRadius: '8px', border: '1px solid #D8D6CE', padding: '16px' }}>
                     {logs.map(log => (
-                      <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #EEEDE7', fontSize: '12.5px' }}>
-                        <span>{log.text}</span>
+                      <div key={log.id} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #D8D6CE', fontSize: '13px' }}>
                         <span style={{ fontFamily: 'monospace', color: '#8B9096' }}>{log.time}</span>
+                        <span style={{ flex: 1 }}>{log.text}</span>
                       </div>
                     ))}
                   </div>
@@ -588,9 +548,11 @@ export default function HouseholdSafetyApp() {
 
               {adminTab === 'export' && (
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ייצוא נתונים</h2>
-                  <p style={{ color: '#8B9096', fontSize: '13.5px', marginBottom: '22px' }}>הפקת דוחות וייצוא נתוני מערכת לקבצים חיצוניים.</p>
-                  <button onClick={() => showToast('הדוח הופק והורד בהצלחה')} style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '11px 20px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>הורד קובץ נתונים (CSV)</button>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px' }}>דוחות וייצוא נתונים</h2>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '24px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                    <p style={{ fontSize: '13.5px', marginBottom: '16px' }}>ניתן לייצא את נתוני המערכת והלוגים לשימוש חיצוני או לצורך תיעוד וגיבוי.</p>
+                    <button onClick={() => showToast('הדוח יוצא בהצלחה!')} style={{ background: '#1C1F22', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>הורד דוח מלא (CSV/Excel)</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -598,9 +560,44 @@ export default function HouseholdSafetyApp() {
         )}
       </main>
 
+      {/* Add Asset Modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+          <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22', width: '100%', maxWidth: '420px', borderRadius: '12px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>הוספת נכס חדש למערכת</h3>
+            <form onSubmit={handleCreateAsset} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>שם הנכס</label>
+                <input type="text" value={newAssetName} onChange={e => setNewAssetName(e.target.value)} placeholder="לדוגמה: לוח חשמל קומה 2" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>מזהה ייחודי (קוד)</label>
+                <input type="text" value={newAssetId} onChange={e => setNewAssetId(e.target.value)} placeholder="לדוגמה: EL-03" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>קטגוריה</label>
+                <select value={newAssetCat} onChange={e => setNewAssetCat(e.target.value as CategoryKey)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>
+                  {Object.entries(categories).map(([k, c]) => (
+                    <option key={k} value={k}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>מיקום בשטח</label>
+                <input type="text" value={newAssetLoc} onChange={e => setNewAssetLoc(e.target.value)} placeholder="לדוגמה: אגף צפוני" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button type="submit" style={{ flex: 1, padding: '11px', background: '#F5B700', color: '#1C1F22', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>שמור נכס</button>
+                <button type="button" onClick={() => setShowAddModal(false)} style={{ padding: '11px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '6px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {toastMessage && (
-        <div style={{ position: 'fixed', bottom: '26px', left: '50%', transform: 'translateX(-50%)', background: '#1C1F22', color: '#EDEDE9', padding: '12px 20px', borderRadius: '8px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.5)', zIndex: 1000, borderRight: `4px solid ${toastMessage.isFail ? '#D64545' : '#4C9A66'}` }}>
+        <div style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', background: toastMessage.isFail ? '#D64545' : '#1C1F22', color: '#fff', padding: '10px 20px', borderRadius: '30px', fontSize: '13px', fontWeight: 600, boxShadow: '0 10px 20px rgba(0,0,0,0.2)', zIndex: 1100, transition: 'all 0.2s' }}>
           {toastMessage.text}
         </div>
       )}
