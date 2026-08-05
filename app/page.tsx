@@ -1,534 +1,609 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+type CategoryKey = 'electricity' | 'fire' | 'hazmat' | 'infrastructure' | 'firstaid';
+
+interface CategoryConfig {
+  name: string;
+  freq: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  icon: string;
+}
 
 interface Asset {
   id: string;
   name: string;
+  category: CategoryKey;
   location: string;
-  category: string;
-  lastChecked: string;
-  status: 'תקין' | 'דורש תשומת לב' | 'בבדיקה';
-  notes: string;
+  status: 'pending' | 'pass' | 'fail' | 'resolved';
+  lastChecked?: string;
+  inspector?: string;
 }
 
-interface ChecklistItem {
+interface LogEntry {
   id: string;
-  question: string;
-  category: string;
+  time: string;
+  text: string;
+  type: 'pass' | 'fail' | 'system' | 'add';
+}
+
+interface GeneralObservation {
+  id: string;
+  name: string;
+  status: 'open' | 'met';
 }
 
 export default function HouseholdSafetyApp() {
-  const [view, setView] = useState<'landing' | 'field' | 'admin' | 'addAsset'>('landing');
-  const [selectedAssetId, setSelectedAssetId] = useState<string>('AST-001');
-  const [shortageNote, setShortageNote] = useState<string>('');
-  const [submitted, setSubmitted] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('הכל');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [viewMode, setViewMode] = useState<'field' | 'admin'>('field');
+  const [landingRole, setLandingRole] = useState<'select' | 'worker' | 'admin-lock' | 'supervisor' | 'qr'>('select');
+  const [adminPass, setAdminPass] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'assets' | 'categories' | 'logs' | 'export'>('dashboard');
 
-  // טופס הוספת נכס חדש
-  const [newAssetName, setNewAssetName] = useState<string>('');
-  const [newAssetLocation, setNewAssetLocation] = useState<string>('');
-  const [newAssetCategory, setNewAssetCategory] = useState<string>('בטיחות אש');
+  const [currentFolder, setCurrentFolder] = useState<CategoryKey | 'observations' | null>(null);
+  const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; isFail?: boolean } | null>(null);
+  
+  // New Asset Form State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetId, setNewAssetId] = useState('');
+  const [newAssetCat, setNewAssetCat] = useState<CategoryKey>('electricity');
+  const [newAssetLoc, setNewAssetLoc] = useState('');
 
-  // רשימת נכסים מלאה למערכת
-  const [assets, setAssets] = useState<Asset[]>([
-    { id: 'AST-001', name: 'ערכת עזרה ראשית ראשית', location: 'מטבח / סלון', category: 'רפואי', lastChecked: '04/08/2026', status: 'תקין', notes: 'נבדק, כל החומרים בתוקף.' },
-    { id: 'AST-002', name: 'מטפה כיבוי אש 3 ק"ג', location: 'כניסה ראשית', category: 'בטיחות אש', lastChecked: '01/08/2026', status: 'תקין', notes: 'לחץ אוויר תקין מד טען ירוק.' },
-    { id: 'AST-003', name: 'גלאי עשן אלחוטי', location: 'מסדרון חדרים', category: 'גילוי אש', lastChecked: '28/07/2026', status: 'דורש תשומת לב', notes: 'נדרשת החלפת סוללה בקרוב.' },
-    { id: 'AST-004', name: 'שמיכת כיבוי אש', location: 'מטבח', category: 'בטיחות אש', lastChecked: '15/07/2026', status: 'תקין', notes: 'נמצא במארז נגיש.' },
-    { id: 'AST-005', name: 'פנס חירום נטען', location: 'ממ"ד', category: 'חירום', lastChecked: '10/07/2026', status: 'בבדיקה', notes: 'בדיקת טעינה יזומה.' },
-  ]);
+  // QR Simulation Input
+  const [qrInputCode, setQrInputCode] = useState('');
 
-  const checklistItems: ChecklistItem[] = [
-    { id: 'c1', question: 'האם הציוד שלם ובאריזה מקורית?', category: 'שלמות פיזית' },
-    { id: 'c2', question: 'האם תוקף הציוד/החומרים בתוקף?', category: 'תוקף' },
-    { id: 'c3', question: 'האם הגישה לנכס פנויה וללא חסימות?', category: 'נגישות' },
-  ];
-
-  const handleFieldSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-
-    // עדכון תאריך וסטטוס הנכס במערכת
-    setAssets(prev => prev.map(a => {
-      if (a.id === selectedAssetId) {
-        return {
-          ...a,
-          lastChecked: new Date().toLocaleDateString('he-IL'),
-          status: shortageNote ? 'דורש תשומת לב' : 'תקין',
-          notes: shortageNote ? `חוסר ידני: ${shortageNote}` : 'נבדק בשטח ונמצא תקין.'
-        };
-      }
-      return a;
-    }));
-
-    setTimeout(() => {
-      setSubmitted(false);
-      setView('landing');
-      setShortageNote('');
-    }, 2200);
-  };
-
-  const handleAddAssetSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAssetName || !newAssetLocation) return;
-
-    const newAsset: Asset = {
-      id: `AST-00${assets.length + 1}`,
-      name: newAssetName,
-      location: newAssetLocation,
-      category: newAssetCategory,
-      lastChecked: new Date().toLocaleDateString('he-IL'),
-      status: 'תקין',
-      notes: 'נוצר לאחרונה במערכת'
-    };
-
-    setAssets([newAsset, ...assets]);
-    setNewAssetName('');
-    setNewAssetLocation('');
-    setView('admin');
-  };
-
-  const filteredAssets = assets.filter(asset => {
-    const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) || asset.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'הכל' || asset.status === filterStatus;
-    return matchesSearch && matchesFilter;
+  const [categories, setCategories] = useState<Record<CategoryKey, CategoryConfig>>({
+    electricity: { name: 'לוחות חשמל ותשתיות', freq: 'weekly', icon: '⚡' },
+    fire: { name: 'ציוד כיבוי אש', freq: 'monthly', icon: '🧯' },
+    hazmat: { name: 'חומרים מסוכנים', freq: 'daily', icon: '⚠️' },
+    infrastructure: { name: 'תשתיות מים וגז', freq: 'monthly', icon: '🔧' },
+    firstaid: { name: 'עזרה ראשונה ובטיחות', freq: 'monthly', icon: '🩹' },
   });
 
+  const [assets, setAssets] = useState<Asset[]>([
+    { id: 'EL-01', name: 'לוח חשמל ראשי קומה 1', category: 'electricity', location: 'מסדרון מרכזי', status: 'pending' },
+    { id: 'EL-02', name: 'לוח חשמל משנה מטבח', category: 'electricity', location: 'מטבח ראשי', status: 'pending' },
+    { id: 'FIRE-01', name: 'מטחנה אבקת יבש 6ק"ג', category: 'fire', location: 'כניסה ראשית', status: 'pending' },
+    { id: 'FIRE-02', name: 'גלגולון כיבוי אש', category: 'fire', location: 'מסדרון אגף מערבי', status: 'pending' },
+    { id: 'HZ-01', name: 'ארון חומרי ניקוי וחיטוי', category: 'hazmat', location: 'חדר שירות', status: 'pending' },
+    { id: 'INF-01', name: 'ברז כיבוי ראשי (ספרינקלרים)', category: 'infrastructure', location: 'חצר חיצונית', status: 'pending' },
+    { id: 'FA-01', name: 'ערכת עזרה ראשונה מספר 1', category: 'firstaid', location: 'עמדת שמירה', status: 'pending' },
+  ]);
+
+  const [observations, setObservations] = useState<GeneralObservation[]>([
+    { id: 'OBS-01', name: 'מעברים פנויים ללא חסימות ציוד', status: 'open' },
+    { id: 'OBS-02', name: 'תאורת חירום תקינה במסדרונות', status: 'open' },
+    { id: 'OBS-03', name: 'שילוט מילוט נראה וברור', status: 'open' },
+  ]);
+
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { id: 'LOG-1', time: '08:30', text: 'אתחול מערכת בטיחות', type: 'system' }
+  ]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const showToast = (text: string, isFail = false) => {
+    setToastMessage({ text, isFail });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const addLog = (text: string, type: LogEntry['type']) => {
+    const timeStr = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    setLogs(prev => [{ id: 'L-' + Date.now(), time: timeStr, text, type }, ...prev]);
+  };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPass === '1234' || adminPass === 'admin') {
+      setViewMode('admin');
+      setLandingRole('select');
+      setAdminPass('');
+      setAdminError('');
+      addLog('התחברות מנהל מערכת הצליחה', 'system');
+    } else {
+      setAdminError('סיסמה שגויה. נסה שוב (ברירת מחדל: 1234)');
+    }
+  };
+
+  const handleCreateAsset = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAssetName || !newAssetId) {
+      showToast('נא למלא את כל השדות החובה', true);
+      return;
+    }
+    const newAsset: Asset = {
+      id: newAssetId,
+      name: newAssetName,
+      category: newAssetCat,
+      location: newAssetLoc || 'לא מוגדר',
+      status: 'pending'
+    };
+    setAssets([...assets, newAsset]);
+    addLog(`נוסף נכס חדש: ${newAssetName} (${newAssetId})`, 'add');
+    setShowAddModal(false);
+    setNewAssetName('');
+    setNewAssetId('');
+    setNewAssetLoc('');
+    showToast('הנכס נוסף בהצלחה!');
+  };
+
+  const handleQrScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const found = assets.find(a => a.id.toLowerCase() === qrInputCode.trim().toLowerCase());
+    if (found) {
+      setActiveAsset(found);
+      setLandingRole('worker');
+      setQrInputCode('');
+      showToast(`זוהה נכס: ${found.name}`);
+    } else {
+      showToast('נכס לא נמצא במערכת לפי מזהה זה', true);
+    }
+  };
+
   return (
-    <div id="app" className="min-h-screen flex flex-col bg-[var(--page-bg)] text-[var(--text)] transition-colors duration-200" dir="rtl">
-      <div className="hazard"></div>
-      
-      {/* סרגל עליון */}
-      <header className="topbar bg-[var(--charcoal)] text-[var(--paper)] flex items-center justify-between px-6 py-3.5 shadow-md">
-        <div className="brand flex flex-col gap-0.5">
-          <span className="eyebrow font-mono text-[10px] tracking-[0.06em] text-[var(--yellow)]">מערכת בקרה תפעולית משולבת</span>
-          <h1 className="font-sans text-[20px] font-extrabold">משק בית · ניהול נכסים, בטיחות וחוסרים</h1>
+    <div dir="rtl" style={{ fontFamily: 'Heebo, sans-serif', minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme === 'dark' ? '#15171A' : '#EDEDE9', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22', transition: 'background 0.2s, color 0.2s' }}>
+      {/* Hazard Strip */}
+      <div style={{ height: '6px', background: 'repeating-linear-gradient(45deg, #F5B700 0 10px, #1C1F22 10px 20px)' }}></div>
+
+      {/* Top Navigation Bar */}
+      <header style={{ background: '#1C1F22', color: '#EDEDE9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: '10px', letterSpacing: '0.06em', color: '#F5B700' }}>משק בית · מעקב בטיחות</span>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>מערכת ניהול ובקרה</h1>
         </div>
-        <div className="topbar-right flex items-center gap-2.5">
-          {view !== 'landing' && (
-            <button 
-              onClick={() => setView('landing')}
-              className="topbar-home-btn bg-transparent border border-[var(--line)] text-[var(--gray)] font-sans text-[11.5px] font-semibold px-3 py-2 rounded-md cursor-pointer whitespace-nowrap hover:bg-[var(--charcoal-2)] hover:text-[var(--paper)] transition-colors"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {viewMode === 'field' && landingRole !== 'select' && (
+            <button
+              onClick={() => { setLandingRole('select'); setCurrentFolder(null); setActiveAsset(null); }}
+              style={{ background: 'transparent', border: '1px solid #3A4046', color: '#8B9096', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '11.5px' }}
             >
-              חזרה לתפריט ראשי
+              ← חזרה לתפריט
             </button>
           )}
+          <div style={{ display: 'flex', background: '#24282C', border: '1px solid #3A4046', borderRadius: '3px', overflow: 'hidden' }}>
+            <button
+              onClick={() => setViewMode('field')}
+              style={{ padding: '9px 18px', background: viewMode === 'field' ? '#F5B700' : 'transparent', color: viewMode === 'field' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+            >
+              שטח (עובד)
+            </button>
+            <button
+              onClick={() => setViewMode('admin')}
+              style={{ padding: '9px 18px', background: viewMode === 'admin' ? '#F5B700' : 'transparent', color: viewMode === 'admin' ? '#1C1F22' : '#8B9096', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+            >
+              ניהול
+            </button>
+          </div>
+          <button
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            style={{ background: '#24282C', border: '1px solid #3A4046', color: '#EDEDE9', width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px' }}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
         </div>
       </header>
 
-      {/* תוכן ראשי */}
-      <main className="flex-1 p-6 flex flex-col items-center justify-center">
-        
-        {/* 1. מסך נחיתה / בחירת מצב */}
-        {view === 'landing' && (
-          <div className="landing-card bg-[var(--surface)] border border-[var(--line-light)] rounded-2xl p-8 max-w-lg w-full text-center shadow-xl">
-            <span className="landing-eyebrow font-sans font-bold text-sm text-[var(--charcoal)] mb-6 px-5 py-2 rounded-full bg-[var(--yellow)] inline-block">
-              בחר מרחב עבודה במערכת
-            </span>
-            <div className="landing-buttons grid grid-cols-1 gap-4">
-              <button 
-                onClick={() => setView('field')}
-                className="landing-btn field flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--yellow-dark)] bg-[var(--surface)] cursor-pointer hover:-translate-y-0.5 transition-all shadow-md text-right w-full"
-              >
-                <span className="text-3xl p-3 bg-amber-50 rounded-lg">📱</span>
-                <div>
-                  <span className="landing-title font-sans font-extrabold text-base block">עמדת שטח / סריקת QR</span>
-                  <span className="landing-sub text-xs text-[var(--gray)]">ביצוע בדיקות תקופתיות והזנה ידנית של חוסרים בשטח</span>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => setView('admin')}
-                className="landing-btn admin flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--charcoal)] bg-[var(--surface)] cursor-pointer hover:-translate-y-0.5 transition-all shadow-md text-right w-full"
-              >
-                <span className="text-3xl p-3 bg-zinc-100 rounded-lg">📊</span>
-                <div>
-                  <span className="landing-title font-sans font-extrabold text-base block">לוח בקרה ניהולי (Admin)</span>
-                  <span className="landing-sub text-xs text-[var(--gray)]">סקירת נכסים, מעקב אחר סטטוסים, חיפוש מתקדם ודוחות</span>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => setView('addAsset')}
-                className="landing-btn add flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--line)] bg-[var(--surface)] cursor-pointer hover:-translate-y-0.5 transition-all shadow-md text-right w-full"
-              >
-                <span className="text-3xl p-3 bg-zinc-100 rounded-lg">➕</span>
-                <div>
-                  <span className="landing-title font-sans font-extrabold text-base block">הגדרת נכס חדש</span>
-                  <span className="landing-sub text-xs text-[var(--gray)]">הוספת ציוד חדש למעקב ובקרת מלאי המשק</span>
-                </div>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 2. מסך עמדת שטח (סימולציית טלפון נייד) */}
-        {view === 'field' && (
-          <div className="phone w-[400px] max-w-full bg-[var(--charcoal-2)] rounded-[26px] p-2.5 shadow-2xl">
-            <div className="phone-screen bg-[var(--surface-alt)] rounded-[18px] min-h-[660px] flex flex-col overflow-hidden p-5">
-              <div className="flex items-center justify-between mb-4 border-b pb-3">
-                <div>
-                  <h2 className="font-extrabold text-sm">עמדת סריקת שטח</h2>
-                  <span className="text-[10px] text-[var(--gray)]">דימוי מסוף נייד / סריקת QR</span>
-                </div>
-                <span className="text-xs font-mono bg-[var(--yellow)] px-2.5 py-1 rounded-full text-[var(--charcoal)] font-bold">מקוון</span>
-              </div>
-
-              {submitted ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                  <div className="text-5xl mb-3 animate-bounce">✅</div>
-                  <h3 className="font-bold text-lg mb-1">הנתונים נקלטו בהצלחה</h3>
-                  <p className="text-xs text-[var(--gray)]">הדוח והחוסרים הידניים עודכנו במערכת הניהולית.</p>
-                </div>
-              ) : (
-                <form onSubmit={handleFieldSubmit} className="flex flex-col gap-3.5 flex-1">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-[var(--charcoal)]">בחירת נכס נסרק:</label>
-                    <select 
-                      value={selectedAssetId} 
-                      onChange={(e) => setSelectedAssetId(e.target.value)}
-                      className="p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs font-semibold"
-                    >
-                      {assets.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} ({a.location})</option>
-                      ))}
-                    </select>
+      <main style={{ flex: 1 }}>
+        {viewMode === 'field' ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '36px 16px 60px' }}>
+            <div style={{ width: '390px', maxWidth: '100%', background: '#24282C', borderRadius: '26px', padding: '10px', boxShadow: '0 30px 60px -20px rgba(0,0,0,0.45)' }}>
+              <div style={{ background: theme === 'dark' ? '#262B32' : '#fff', borderRadius: '18px', minHeight: '640px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                
+                {/* Landing Roles */}
+                {landingRole === 'select' && (
+                  <div style={{ padding: '32px 28px', textAlign: 'center', margin: 'auto' }}>
+                    <div style={{ display: 'inline-block', fontWeight: 700, fontSize: '14px', color: '#1C1F22', background: '#F5B700', padding: '8px 18px', borderRadius: '20px', marginBottom: '22px' }}>
+                      בחר תפקיד לכניסה למערכת
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <button
+                        onClick={() => setLandingRole('worker')}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #C99200', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      >
+                        <span style={{ fontSize: '26px' }}>👷‍♂️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>בדיקות שטח / משתמש</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>ביצוע ביקורות ותיעוד שוטף</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('qr')}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #4C9A66', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      >
+                        <span style={{ fontSize: '26px' }}>📷</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>סריקת קוד QR לנכס</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>פתיחת בדיקה מהירה באמצעות ברקוד</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('supervisor')}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #3A6EA5', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      >
+                        <span style={{ fontSize: '26px' }}>🛡️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>מנהל אירועים / אחראי</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>סקירת תקלות פתוחות ואישור מענים</div>
+                      </button>
+                      <button
+                        onClick={() => setLandingRole('admin-lock')}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '18px 16px', borderRadius: '12px', border: '2px solid #1C1F22', background: theme === 'dark' ? '#20242A' : '#fff', cursor: 'pointer', textAlign: 'center', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      >
+                        <span style={{ fontSize: '26px' }}>⚙️</span>
+                        <div style={{ fontWeight: 800, fontSize: '15px' }}>הנהלה וניהול מערכת</div>
+                        <div style={{ fontSize: '11px', color: '#8B9096' }}>דוחות והגדרות מערכת מתקדמות</div>
+                      </button>
+                    </div>
                   </div>
+                )}
 
-                  <div className="flex flex-col gap-2 bg-[var(--surface)] p-3 rounded-lg border border-[var(--line-light)]">
-                    <span className="text-xs font-bold text-[var(--charcoal)]">שאלון בדיקת תקינות מהירה:</span>
-                    {checklistItems.map(item => (
-                      <label key={item.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                        <input type="checkbox" defaultChecked className="accent-[var(--charcoal)] h-4 w-4" />
-                        <span className="text-[var(--text)]">{item.question}</span>
-                      </label>
+                {/* QR Simulation Screen */}
+                {landingRole === 'qr' && (
+                  <div style={{ padding: '32px 28px', textAlign: 'center', margin: 'auto', width: '100%' }}>
+                    <h3 style={{ fontWeight: 800, fontSize: '18px', marginBottom: '8px' }}>סורק קוד QR</h3>
+                    <p style={{ fontSize: '12px', color: '#8B9096', marginBottom: '20px' }}>צלם את הקוד על גבי הנכס או הקלד את מזהה הנכס (לדוגמה: EL-01)</p>
+                    <div style={{ border: '2px dashed #C99200', borderRadius: '12px', padding: '24px', marginBottom: '20px', background: theme === 'dark' ? '#20242A' : '#FAFAFA' }}>
+                      <div style={{ fontSize: '40px', marginBottom: '10px' }}>📷</div>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#C99200' }}>מכוון מצלמה אל הברקוד...</div>
+                    </div>
+                    <form onSubmit={handleQrScanSubmit}>
+                      <input
+                        type="text"
+                        placeholder="הקלד מזהה נכס (לדוגמה: EL-01)"
+                        value={qrInputCode}
+                        onChange={(e) => setQrInputCode(e.target.value)}
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #D8D6CE', marginBottom: '12px', textAlign: 'center', fontSize: '13px', background: theme === 'dark' ? '#20242A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="submit" style={{ flex: 1, padding: '11px', background: '#F5B700', color: '#1C1F22', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>אתר נכס</button>
+                        <button type="button" onClick={() => setLandingRole('select')} style={{ padding: '11px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '8px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Admin Password Lock */}
+                {landingRole === 'admin-lock' && (
+                  <div style={{ padding: '36px 28px', textAlign: 'center', margin: 'auto' }}>
+                    <h3 style={{ fontWeight: 800, fontSize: '19px', marginBottom: '18px' }}>כניסת מנהל מערכת</h3>
+                    <form onSubmit={handleAdminLogin}>
+                      <div style={{ position: 'relative', marginBottom: '10px' }}>
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          placeholder="••••"
+                          maxLength={6}
+                          value={adminPass}
+                          onChange={(e) => setAdminPass(e.target.value)}
+                          style={{ width: '100%', textAlign: 'center', fontSize: '22px', letterSpacing: '0.3em', padding: '14px 44px', border: '2px solid #D8D6CE', borderRadius: '10px', fontFamily: 'monospace', background: theme === 'dark' ? '#20242A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(!showPass)}
+                          style={{ position: 'absolute', top: '50%', left: '8px', transform: 'translateY(-50%)', background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '6px' }}
+                        >
+                          👁️
+                        </button>
+                      </div>
+                      {adminError && <div style={{ color: '#D64545', fontSize: '12.5px', fontWeight: 600, marginBottom: '10px' }}>{adminError}</div>}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                        <button type="submit" style={{ flex: 1, padding: '12px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>אישור</button>
+                        <button type="button" onClick={() => { setLandingRole('select'); setAdminError(''); }} style={{ padding: '12px', background: 'transparent', border: '1.5px solid #D8D6CE', borderRadius: '8px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Worker Header & Categories */}
+                {landingRole === 'worker' && (
+                  <div style={{ background: '#1C1F22', color: '#EDEDE9', padding: '16px 18px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                      <button onClick={() => setLandingRole('select')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #3A4046', color: '#b8bcc1', fontSize: '10.5px', padding: '5px 12px', borderRadius: '14px', cursor: 'pointer' }}>החלף משתמש</button>
+                    </div>
+                    <span style={{ fontFamily: 'monospace', fontSize: '9px', letterSpacing: '0.08em', color: '#F5B700' }}>FIELD INSPECTION</span>
+                    <h2 style={{ fontWeight: 700, fontSize: '17px', margin: '2px 0 0' }}>בדיקות בטיחות שוטפות</h2>
+                  </div>
+                )}
+
+                {landingRole === 'worker' && !currentFolder && !activeAsset && (
+                  <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+                    <div style={{ fontSize: '12px', color: '#8B9096', textAlign: 'center' }}>בחר קטגוריה לבדיקה בשטח:</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {Object.entries(categories).map(([key, cat]) => {
+                        const count = assets.filter((a) => a.category === key && a.status === 'pass').length;
+                        const total = assets.filter((a) => a.category === key).length;
+                        return (
+                          <div
+                            key={key}
+                            onClick={() => setCurrentFolder(key as CategoryKey)}
+                            style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1.5px solid #D8D6CE', borderRadius: '10px', padding: '20px 12px', textAlign: 'center', cursor: 'pointer' }}
+                          >
+                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>{cat.icon}</div>
+                            <div style={{ fontSize: '12.5px', fontWeight: 700 }}>{cat.name}</div>
+                            <div style={{ fontSize: '10.5px', color: '#8B9096', marginTop: '4px' }}>{count}/{total} בוצעו</div>
+                          </div>
+                        );
+                      })}
+                      <div
+                        onClick={() => setCurrentFolder('observations')}
+                        style={{ gridColumn: '1 / -1', background: theme === 'dark' ? '#20242A' : '#fff', border: '1.5px solid #3A6EA5', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer' }}
+                      >
+                        <div style={{ fontSize: '24px', marginBottom: '4px' }}>📋</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700 }}>תצפיות בטיחות וכלליות</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inside Category Folder */}
+                {landingRole === 'worker' && currentFolder && currentFolder !== 'observations' && !activeAsset && (
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה לקטגוריות</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      {assets.filter((a) => a.category === currentFolder).map((asset) => (
+                        <div
+                          key={asset.id}
+                          onClick={() => setActiveAsset(asset)}
+                          style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '12px', textAlign: 'center', cursor: 'pointer' }}
+                        >
+                          <div style={{ fontSize: '12px', fontWeight: 600 }}>{asset.name}</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '9.5px', color: '#8B9096', margin: '2px 0 6px' }}>{asset.id}</div>
+                          <span style={{ fontSize: '10px', padding: '2px 9px', borderRadius: '20px', background: asset.status === 'pass' ? '#E7F2EA' : asset.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : asset.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
+                            {asset.status === 'pass' ? 'תקין' : asset.status === 'fail' ? 'תקלה' : 'ממתין'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Observations View */}
+                {landingRole === 'worker' && currentFolder === 'observations' && (
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button onClick={() => setCurrentFolder(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה</button>
+                    {observations.map((obs) => (
+                      <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', padding: '12px', borderRadius: '8px', fontSize: '12.5px', border: '1px solid #D8D6CE' }}>
+                        <span>{obs.name}</span>
+                        <button
+                          onClick={() => {
+                            setObservations(observations.map(o => o.id === obs.id ? { ...o, status: o.status === 'open' ? 'met' : 'open' } : o));
+                            showToast('סטטוס תצפית עודכן');
+                            addLog(`תצפית ${obs.id} עודכנה לסטטוס ${obs.status === 'open' ? 'בוצע' : 'פתוח'}`, 'pass');
+                          }}
+                          style={{ padding: '6px 10px', fontSize: '11px', background: obs.status === 'met' ? '#4C9A66' : '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          {obs.status === 'open' ? 'סמן כבוצע' : 'פתוח מחדש'}
+                        </button>
+                      </div>
                     ))}
                   </div>
+                )}
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-[var(--charcoal)]">דיווח ידני על חוסרים / הערות:</label>
-                    <textarea 
-                      value={shortageNote}
-                      onChange={(e) => setShortageNote(e.target.value)}
-                      placeholder="הזן כאן חוסרים ידניים או פגמים שהתגלו בנכס..."
-                      className="p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs h-20 resize-none"
-                    />
+                {/* Active Asset Check Form */}
+                {landingRole === 'worker' && activeAsset && (
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <button onClick={() => setActiveAsset(null)} style={{ alignSelf: 'flex-start', background: '#F5B700', border: 'none', padding: '6px 14px', borderRadius: '15px', fontWeight: 700, cursor: 'pointer', fontSize: '11px', color: '#1C1F22' }}>← חזרה לרשימה</button>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px', borderRadius: '8px', border: '1.5px solid #D8D6CE' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: '9.5px', color: '#C99200' }}>{activeAsset.id}</div>
+                      <div style={{ fontWeight: '700', fontSize: '18px', marginTop: '3px' }}>{activeAsset.name}</div>
+                      <div style={{ fontSize: '12px', color: '#8B9096', marginTop: '6px' }}>מיקום: {activeAsset.location}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
+                      <button
+                        onClick={() => {
+                          setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'pass' } : a));
+                          showToast('הנכס סומן כתקין!');
+                          addLog(`נכס ${activeAsset.name} (${activeAsset.id}) סומן כתקין`, 'pass');
+                          setActiveAsset(null);
+                        }}
+                        style={{ flex: 1, padding: '14px', background: '#4C9A66', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
+                      >
+                        ✓ תקין לחלוטין
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAssets(assets.map(a => a.id === activeAsset.id ? { ...a, status: 'fail' } : a));
+                          showToast('דווחה תקלה!', true);
+                          addLog(`נמצאה תקלה בנכס ${activeAsset.name} (${activeAsset.id})`, 'fail');
+                          setActiveAsset(null);
+                        }}
+                        style={{ flex: 1, padding: '14px', background: '#D64545', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px' }}
+                      >
+                        ⚠️ נמצאה תקלה
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Supervisor View */}
+                {landingRole === 'supervisor' && (
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <h3 style={{ fontSize: '15.5px', fontWeight: 700, marginBottom: '6px' }}>תקלות פתוחות לטיפול</h3>
+                    {assets.filter(a => a.status === 'fail').length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#8B9096', padding: '40px 20px', fontSize: '13px' }}>אין תקלות פתוחות כרגע. הכל תקין!</div>
+                    ) : (
+                      assets.filter(a => a.status === 'fail').map(a => (
+                        <div key={a.id} style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #D64545', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700 }}>{a.name}</div>
+                            <div style={{ fontSize: '11px', color: '#8B9096' }}>{a.location}</div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setAssets(assets.map(item => item.id === a.id ? { ...item, status: 'resolved' } : item));
+                              showToast('התקלה סומנה כטופלה');
+                              addLog(`תקלה בנכס ${a.name} טופלה`, 'pass');
+                            }}
+                            style={{ background: '#F5B700', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', color: '#1C1F22' }}
+                          >
+                            סמן כטופל
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Admin View */
+          <div style={{ display: 'flex', minHeight: 'calc(100vh - 58px)' }}>
+            <aside style={{ width: '200px', background: '#1C1F22', color: '#EDEDE9', flexShrink: 0, padding: '18px 0' }}>
+              <div onClick={() => setAdminTab('dashboard')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'dashboard' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'dashboard' ? '3px solid #F5B700' : '3px solid transparent' }}>📊 לוח בקרה ראשי</div>
+              <div onClick={() => setAdminTab('assets')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'assets' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'assets' ? '3px solid #F5B700' : '3px solid transparent' }}>🗂️ ניהול נכסים</div>
+              <div onClick={() => setAdminTab('categories')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'categories' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'categories' ? '3px solid #F5B700' : '3px solid transparent' }}>⚙️ קטגוריות ותדירות</div>
+              <div onClick={() => setAdminTab('logs')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'logs' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'logs' ? '3px solid #F5B700' : '3px solid transparent' }}>📜 יומן אירועים</div>
+              <div onClick={() => setAdminTab('export')} style={{ padding: '11px 20px', cursor: 'pointer', background: adminTab === 'export' ? '#24282C' : 'transparent', fontWeight: 700, fontSize: '13.5px', borderRight: adminTab === 'export' ? '3px solid #F5B700' : '3px solid transparent' }}>📥 דוחות וייצוא נתונים</div>
+            </aside>
+            <div style={{ flex: 1, padding: '28px 32px 60px', maxWidth: '1180px' }}>
+              {adminTab === 'dashboard' && (
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>לוח בקרה ניהולי</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>סקירה כללית של מצב הבטיחות במשק הבית.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px', marginBottom: '30px' }}>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700 }}>סך נכסים במערכת</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px' }}>{assets.length}</div>
+                    </div>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#4C9A66' }}>נכסים תקינים</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px', color: '#4C9A66' }}>{assets.filter(a => a.status === 'pass').length}</div>
+                    </div>
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '16px 18px', borderRadius: '8px', border: '1px solid #D8D6CE' }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#D64545' }}>תקלות פתוחות</div>
+                      <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '12px', color: '#D64545' }}>{assets.filter(a => a.status === 'fail').length}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {adminTab === 'assets' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
+                    <div>
+                      <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ניהול נכסים</h2>
+                      <p style={{ color: '#8B9096', fontSize: '13px' }}>רשימת כל הנכסים והציוד המפוקח.</p>
+                    </div>
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}
+                    >
+                      + הוסף נכס חדש
+                    </button>
                   </div>
 
-                  <div className="mt-auto pt-2 flex gap-2">
-                    <button 
-                      type="submit"
-                      className="flex-1 bg-[var(--charcoal)] text-[var(--paper)] font-bold py-3 rounded-lg text-xs cursor-pointer hover:bg-black transition-colors shadow"
-                    >
-                      שגר דיווח חוסרים / תקינות
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setView('landing')}
-                      className="px-3 bg-transparent border border-[var(--line)] text-[var(--gray)] font-semibold py-3 rounded-lg text-xs cursor-pointer"
-                    >
-                      ביטול
-                    </button>
+                  {showAddModal && (
+                    <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', padding: '20px', borderRadius: '10px', border: '1.5px solid #F5B700', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>הוספת נכס חדש למערכת</h3>
+                      <form onSubmit={handleCreateAsset} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>שם הנכס</label>
+                          <input type="text" placeholder="לדוגמה: לוח חשמל קומה 2" value={newAssetName} onChange={e => setNewAssetName(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מזהה ייחודי (ID)</label>
+                          <input type="text" placeholder="לדוגמה: EL-03" value={newAssetId} onChange={e => setNewAssetId(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>קטגוריה</label>
+                          <select value={newAssetCat} onChange={e => setNewAssetCat(e.target.value as CategoryKey)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>
+                            {Object.entries(categories).map(([k, c]) => (
+                              <option key={k} value={k}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '11px', color: '#8B9096', display: 'block', marginBottom: '4px' }}>מיקום</label>
+                          <input type="text" placeholder="לדוגמה: מרתף" value={newAssetLoc} onChange={e => setNewAssetLoc(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #D8D6CE', background: theme === 'dark' ? '#15171A' : '#fff', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }} />
+                        </div>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '8px', marginTop: '8px' }}>
+                          <button type="submit" style={{ padding: '10px 18px', background: '#1C1F22', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>שמור נכס</button>
+                          <button type="button" onClick={() => setShowAddModal(false)} style={{ padding: '10px 18px', background: 'transparent', border: '1px solid #D8D6CE', borderRadius: '6px', cursor: 'pointer', color: theme === 'dark' ? '#EAE8E1' : '#1C1F22' }}>ביטול</button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '6px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: theme === 'dark' ? '#262B32' : '#EDEDE9', textAlign: 'right' }}>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מזהה</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>שם הנכס</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>מיקום</th>
+                          <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#8B9096' }}>סטטוס</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assets.map(asset => (
+                          <tr key={asset.id} style={{ borderBottom: '1px solid #EEEDE7' }}>
+                            <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: '12px', direction: 'ltr', textAlign: 'right' }}>{asset.id}</td>
+                            <td style={{ padding: '10px 12px', fontWeight: 600, fontSize: '13px' }}>{asset.name}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>{asset.location}</td>
+                            <td style={{ padding: '10px 12px', fontSize: '13px' }}>
+                              <span style={{ padding: '3px 9px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: asset.status === 'pass' ? '#E7F2EA' : asset.status === 'fail' ? '#FBEAEA' : '#EFE9DA', color: asset.status === 'pass' ? '#4C9A66' : asset.status === 'fail' ? '#D64545' : '#8a6d1f' }}>
+                                {asset.status === 'pass' ? 'תקין' : asset.status === 'fail' ? 'תקלה' : 'ממתין'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </form>
+                </div>
+              )}
+
+              {adminTab === 'categories' && (
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>הגדרת קטגוריות</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>ניהול תדירות ועצי קטגוריות הבדיקה.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {Object.entries(categories).map(([key, cat]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '14px 16px', fontSize: '13.5px' }}>
+                        <span style={{ fontWeight: 700 }}>{cat.icon} {cat.name}</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#C99200', background: '#FFF9E9', padding: '4px 10px', borderRadius: '6px' }}>{cat.freq}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {adminTab === 'logs' && (
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>יומן אירועים ופעילות</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13px', marginBottom: '22px' }}>תיעוד שוטף של כלל הפעולות שבוצעו במערכת.</p>
+                  <div style={{ background: theme === 'dark' ? '#20242A' : '#fff', border: '1px solid #D8D6CE', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {logs.map(log => (
+                      <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #EEEDE7', fontSize: '12.5px' }}>
+                        <span>{log.text}</span>
+                        <span style={{ fontFamily: 'monospace', color: '#8B9096' }}>{log.time}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {adminTab === 'export' && (
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px' }}>ייצוא נתונים</h2>
+                  <p style={{ color: '#8B9096', fontSize: '13.5px', marginBottom: '22px' }}>הפקת דוחות וייצוא נתוני מערכת לקבצים חיצוניים.</p>
+                  <button onClick={() => showToast('הדוח הופק והורד בהצלחה')} style={{ background: '#F5B700', color: '#1C1F22', border: 'none', padding: '11px 20px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>הורד קובץ נתונים (CSV)</button>
+                </div>
               )}
             </div>
           </div>
         )}
-
-        {/* 3. לוח בקרה ניהולי (Admin) */}
-        {view === 'admin' && (
-          <div className="admin-wrap flex flex-col w-full max-w-[1100px] bg-[var(--surface)] border border-[var(--line-light)] rounded-xl p-6 shadow-lg gap-5">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b pb-4 gap-3">
-              <div>
-                <h2 className="font-extrabold text-xl">לוח בקרה ניהולי ודוחות מלאי</h2>
-                <p className="text-xs text-[var(--gray)]">ניהול מרוכז של כל נכסי ובטיחות משק הבית.</p>
-              </div>
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <button 
-                  onClick={() => setView('addAsset')}
-                  className="bg-[var(--yellow)] text-[var(--charcoal)] font-bold px-4 py-2 rounded-lg text-xs cursor-pointer shadow hover:opacity-95"
-                >
-                  + הוסף נכס
-                </button>
-                <button 
-                  onClick={() => setView('landing')}
-                  className="bg-[var(--charcoal)] text-[var(--paper)] font-bold px-4 py-2 rounded-lg text-xs cursor-pointer"
-                >
-                  חזרה לתפריט ראשי
-                </button>
-              </div>
-            </div>
-
-            {/* סרגלי חיפוש וסינון */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-[var(--surface-alt)] p-3 rounded-lg border border-[var(--line-light)]">
-              <input 
-                type="text" 
-                placeholder="חיפוש לפי שם נכס או מיקום..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full md:w-72 p-2 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs"
-              />
-
-              <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
-                <span className="text-xs font-bold text-[var(--gray)]">סינון סטטוס:</span>
-                {['הכל', 'תקין', 'דורש תשומת לב', 'בבדיקה'].map(status => (
-                  <button 
-                    key={status}
-                    onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
-                      filterStatus === status ? 'bg-[var(--charcoal)] text-[var(--paper)]' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--gray)]'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* טבלת נכסים מפורטת */}
-            <div className="overflow-x-auto min-h-[300px]">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--line)] text-xs text-[var(--gray)] font-mono">
-                    <th className="py-3 px-3">מזהה</th>
-                    <th className="py-3 px-3">שם הנכס</th>
-                    <th className="py-3 px-3">קטגוריה</th>
-                    <th className="py-3 px-3">מיקום</th>
-                    <th className="py-3 px-3">בדיקה אחרונה</th>
-                    <th className="py-3 px-3">סטטוס ותיעוד</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {filteredAssets.length > 0 ? (
-                    filteredAssets.map(asset => (
-                      <tr key={asset.id} className="border-b border-[var(--line-light)] hover:bg-[var(--surface-alt)] transition-colors">
-                        <td className="py-3.5 px-3 font-mono text-xs font-bold text-[var(--gray)]">{asset.id}</td>
-                        <td className="py-3.5 px-3 font-bold">{asset.name}</td>
-                        <td className="py-3.5 px-3 text-xs text-[var(--gray)]">{asset.category}</td>
-                        <td className="py-3.5 px-3 text-xs">{asset.location}</td>
-                        <td className="py-3.5 px-3 text-xs font-mono">{asset.lastChecked}</td>
-                        <td className="py-3.5 px-3 flex flex-col gap-1">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold w-fit ${
-                            asset.status === 'תקין' ? 'bg-green-100 text-green-800' : 
-                            asset.status === 'דורש תשומת לב' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {asset.status}
-                          </span>
-                          <span className="text-[11px] text-[var(--gray)]">{asset.notes}</span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-[var(--gray)]">
-                        לא נמצאו נכסים העונים לתנאי החיפוש.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 4. מסך הוספת נכס חדש */}
-        {view === 'addAsset' && (
-          <div className="add-card bg-[var(--surface)] border border-[var(--line-light)] rounded-2xl p-8 max-w-md w-full shadow-xl">
-            <div className="border-b pb-3 mb-4 flex items-center justify-between">
-              <h2 className="font-extrabold text-lg">הוספת נכס חדש למערכת</h2>
-              <button 
-                onClick={() => setView('landing')}
-                className="text-xs text-[var(--gray)] hover:text-black cursor-pointer"
-              >
-                ✕ סגור
-              </button>
-            </div>
-
-            <form onSubmit={handleAddAssetSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-[var(--charcoal)]">שם הנכס / הציוד:</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="לדוגמה: ערכת עזרה ראשית קומה 2"
-                  value={newAssetName}
-                  onChange={(e) => setNewAssetName(e.target.value)}
-                  className="p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-[var(--charcoal)]">מיקום פיזי במשק הבית:</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="לדוגמה: חדר שינה הורים"
-                  value={newAssetLocation}
-                  onChange={(e) => setNewAssetLocation(e.target.value)}
-                  className="p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-[var(--charcoal)]">קטגוריית נכס:</label>
-                <select 
-                  value={newAssetCategory}
-                  onChange={(e) => setNewAssetCategory(e.target.value)}
-                  className="p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs"
-                >
-                  <option value="בטיחות אש">בטיחות אש</option>
-                  <option value="רפואי">רפואי ועזרה ראשית</option>
-                  <option value="חירום">ציוד חירום</option>
-                  <option value="כללי">כללי ותחזוקה</option>
-                </select>
-              </div>
-
-              <div className="pt-3 flex gap-2">
-                <button 
-                  type="submit"
-                  className="flex-1 bg-[var(--charcoal)] text-[var(--paper)] font-bold py-2.5 rounded-lg text-xs cursor-pointer hover:bg-black transition-colors"
-                >
-                  שמור נכס במערכת
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setView('landing')}
-                  className="px-4 bg-transparent border border-[var(--line)] text-[var(--gray)] font-semibold py-2.5 rounded-lg text-xs cursor-pointer"
-                >
-                  ביטול
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
       </main>
-      
-      <div className="hazard thin"></div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{ position: 'fixed', bottom: '26px', left: '50%', transform: 'translateX(-50%)', background: '#1C1F22', color: '#EDEDE9', padding: '12px 20px', borderRadius: '8px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.5)', zIndex: 1000, borderRight: `4px solid ${toastMessage.isFail ? '#D64545' : '#4C9A66'}` }}>
+          {toastMessage.text}
+        </div>
+      )}
     </div>
   );
 }
-commentsLabel:'Комментарии (необязательно)', commentsPlaceholder:'Опишите проблему, например: низкое давление, повреждена пломба...',
-    submitInspection:'Отправить проверку',
-    toastLogged:(id,res)=>`${id} записан как ${res}`,
-    tabDashboard:'Дашборд', tabAssets:'Объекты', tabCategories:'Категории', tabWorkers:'Инспекторы', tabHistory:'История', tabExport:'Экспорт',
-    dashboardTitle:'Дашборд', dashboardSub:'Прогресс циклов проверок в реальном времени по всем категориям.',
-    cycleLabel:'цикл', checkedLabel:'проверено', recentActivity:'Последняя активность', simulateReset:'Симулировать сброс месяца',
-    colTimestamp:'Метка времени', colAsset:'Объект', colId:'ID', colWorker:'Инспектор', colResult:'Результат',
-    colCategory:'Категория', colLocation:'Местоположение', colLastChecked:'Последняя проверка', colComment:'Комментарий', colStatus:'Статус',
-    colDateChecked:'Дата проверки', colName:'Имя', colEmployeeNum:'Таб. №', colTotal:'Всего проверок',
-    colPassRate:'Процент исправности', colLastActivity:'Последняя активность',
-    alertPanelTitle:'Неисправные проверки, требующие внимания', alertPanelHint:'Нажмите на строку для просмотра деталей чек-листа',
-    markResolved:'Отметить решенным', noFailedInspections:'Нет открытых неисправных проверок. 🎉',
-    noInspectionsYet:'Проверки пока не зарегистрированы.',
-    assetsTitle:'Объекты', assetsSub:'Добавляйте, редактируйте или удаляйте отслеживаемые объекты. Каждый получает уникальный QR-код — вы можете распечатать этикетку и наклеить её на оборудование.',
-    fieldAssetName:'Имя объекта', fieldAssetId:'ID объекта', fieldCategory:'Категория', fieldLocationLabel:'Местоположение',
-    addAssetBtn:'+ Добавить объект', allItemsTitle:'Все объекты', printAllBtn:'🖨️ Печать всех QR-меток',
-    printQrBtn:'🖨️ Печать QR', deleteBtn:'Удалить', noAssetsYet:'Объектов пока нет.',
-    categoriesTitle:'Категории проверок', categoriesSub:'Создавайте новые типы проверок, управляйте частотой сброса и настраивайте чек-лист для полевых инспекторов.',
-    itemsCountLabel:(t,d,total)=>`${t} объектов · ${d}/${total} проверено в этом цикле`,
-    newCategoryName:'Имя новой категории', frequencyLabel:'Периодичность', createCategoryBtn:'+ Создать категорию',
-    checklistEditorLabel:'Чек-лист для полевых инспекторов', addChecklistItemPlaceholder:'Добавить вопрос в чек-лист...', addBtn:'+ Добавить',
-    noChecklistItems:'Нет пунктов чек-листа — добавьте ниже',
-    freqWeekly:'Еженедельно', freqMonthly:'Ежемесячно', freqQuarterly:'Ежеквартально', freqAnnually:'Ежегодно',
-    workersTitle:'Инспекторы', workersSub:'Отслеживание активности инспекторов — нажмите на строку для просмотра полной истории.',
-    activeWorkers:'Активные инспекторы', totalInspections:'Всего проверок', avgPerWorker:'В среднем на инспектора', topWorker:'Самый активный инспектор',
-    noInspectionsRecorded:'В системе еще нет записей о проверках.',
-    historyTitle:'История проверок', historySub:'Полный журнал аудита всех отправленных проверок.',
-    exportTitle:'Экспорт данных соответствия', exportSub:'Загрузите полную историю проверок в нужном формате или предварительно просмотрите данные.',
-    csvTitle:'CSV / Excel', csvDesc:'Полный журнал в виде CSV-файла, готового для таблиц — открывается прямо в Excel.', csvBtn:'Скачать .csv',
-    wordTitle:'Документ Word', wordDesc:'Отчет о соответствии в формате .doc, готовый к сохранению или отправке.', wordBtn:'Скачать .doc',
-    pdfTitle:'PDF', pdfDesc:'Отчет, готовый к печати. Открывает диалог печати браузера — выберите "Сохранить как PDF".', pdfBtn:'Создать PDF',
-    previewBtn:'👁 Предпросмотр', reportTitle:'Мишек Байт — Отчет о соответствии проверок безопасности',
-    inspectionDetailNoChecklist:'Детали чек-листа недоступны для этой проверки (старая запись до появления этой функции).',
-    inspectionDetailResolvedNote:'Это ручная запись администратора о разрешении — полный чек-лист повторной проверки отсутствует.',
-    commentsHeading:'Комментарии:',
-    categoryModalChecked:'Проверено', categoryModalPending:'Ожидает проверки',
-    categoryModalNoneChecked:'В текущем цикле еще ничего не проверено', categoryModalAllDone:'Все объекты проверены в этом цикле 🎉',
-    noInspectionHistoryForWorker:'Для этого инспектора нет записей о проверках.',
-    statusPending:'Ожидание', statusPass:'Исправно', statusFail:'Неисправно', statusResolved:'Устранено',
-  },
-  ar: { dir:'rtl', name:'العربية',
-    appEyebrow:'رقمنة صيانة السلامة في المصنع', appTitle:'משק בית · تتبع السلامة',
-    tabField:'مفتش الميدان', tabAdmin:'لوحة الإدارة', topbarHome:'🏠 شاشة الدخول',
-    landingChoose:'اختر طريقة تسجيل الدخول إلى النظام',
-    landingFieldTitle:'مفتش الميدان', landingFieldSub:'مسح رموز QR وتعبئة الفحوصات',
-    landingAdminTitle:'لوحة الإدارة', landingAdminSub:'مطلوبة كلمة المرور',
-    landingSupervisorTitle:'مشرف', landingSupervisorSub:'عرض فقط، بدون تعديل',
-    supervisorLoginEyebrow:'دخول مشرف', supervisorLoginTitle:'أدخل اسمك',
-    supervisorLoginError:'الرجاء إدخال الاسم', supervisorLoginSubmit:'متابعة للعرض',
-    readOnlyBadge:(name)=>`🕵️ وضع المشرف (عرض فقط) — ${name}`,
-    workerLoginEyebrow:'دخول مفتش الميدان', workerLoginTitle:'أدخل تفاصيلك',
-    fieldFullName:'الاسم الكامل', fieldEmployeeId:'رقم الموظف', fieldRole:'الدور',
-    placeholderName:'مثال: داني ريجيف', placeholderId:'مثال: 4821', placeholderRole:'مثال: فني صيانة',
-    workerLoginError:'الرجاء تعبئة جميع الحقول', workerLoginSubmit:'الانتقال إلى الفحوصات',
-    lettersOnlyError:(field)=>`الحقل "${field}" يمكن أن يحتوي على أحرف فقط (بدون أرقام)`,
-    digitsOnlyError:(field)=>`الحقل "${field}" يمكن أن يحتوي على أرقام فقط (بدون أحرف)`,
-    adminLockEyebrow:'دخول لوحة الإدارة', adminLockTitle:'أدخل كلمة المرور', adminLockError:'كلمة المرور خاطئة، حاول مرة أخرى',
-    adminLockSubmit:'دخول', showPassword:'إظهار كلمة المرور', hidePassword:'إخفاء كلمة المرور',
-    backLink:'رجوع', backToEntry:'⟵ رجوع إلى شاشة الدخول',
-    scanEyebrow:'مسح وفحص', scanTitleHello:(n)=>`مرحباً ${n}، اختر عنصراً للمسح`, scanTitleGeneric:'اختر عنصراً للمسح',
-    cameraEyebrow:'مسح الكاميرا', cameraTitle:'وجه الكاميرا نحو رمز QR',
-    photoEyebrow:'توثيق فوتوغرافي', photoTitle:'التقط صوراً للخلل',
-    formEyebrow:'نموذج الفحص', formTitle:'فحص العنصر',
-    scanInstruction:'انقر فوق <b>مسح بالكاميرا</b> للمسح الحقيقي، أو انقر فوق البلاطة لمحاكاة المسح مباشرة.',
-    scanCameraBtn:'📷 مسح بالكاميرا',
-    cameraRequesting:'جاري طلب إذن الكاميرا...', cameraSearching:'جاري البحث عن رمز QR...',
-    cameraNotSupported:'هذا المتصفح لا يدعم الوصول إلى الكاميرا من هذه الصفحة. تأكد من أنك تعمل على عنوان http/https حقيقي وليس ملفاً محلياً.',
-    cameraDenied:'تعذر الوصول إلى الكاميرا. تأكد من منح إذن الكاميرا وأن الصفحة تم تحميلها من عنوان شبكة حقيقي (ليس ملفاً محلياً).',
-    cameraNotRecognized:(d)=>`تم مسح الرمز ولكن لم يتم التعرف عليه في النظام: ${d}`,
-    cancelCamera:'إلغاء — رجوع للقائمة',
-    photoDocFor:'التوثيق لـ:', capturePhotoBtn:'📸 التقاط صورة', cancelPhotoBtn:'إلغاء — رجوع للنموذج',
-    photoReady:'وجه الكاميرا نحو الخلل واضغط على "التقاط صورة"', photoCapturedToast:'تم التقاط الصورة وإرفاقها بالبند',
-    backToScan:'⟵ رجوع إلى الفحوصات',
-    fieldId:'المعرف', fieldLocation:'الموقع', fieldFrequency:'التكرار',
-    checklistHeader:'قائمة التدقيق — ضع علامة على كل سطر على حدة',
-    resultPass:'✓ سليم', resultFail:'✕ غير سليم', resultLabel:'النتيجة',
-    attachPhoto:'📷 إرفاق صورة لهذا البند', replacePhoto:'🔄 استبدال الصورة',
-    resultSummaryOk:'✓ جميع البنود سليمــــة — النتيجة الإجمالية: سليم',
-    resultSummaryBad:'✕ وُجد بند واحد أو أكثر غير سليم — النتيجة الإجمالية: غير سليم',
-    resultSummaryWait:(n)=>`أجب عن جميع بنود قائمة التدقيق (${n}) لتحديد النتيجة`,
-    commentsLabel:'ملاحظات (اختياري)', commentsPlaceholder:'سجل أي مشكلة، مثال: مقياس ضغط منخفض، ختم مقصور...',
-    submitInspection:'إرسال الفحص',
-    toastLogged:(id,res)=>`تم تسجيل ${id} كـ ${res}`,
-    tabDashboard:'لوحة البيانات', tabAssets:'الأصول', tabCategories:'الفئات', tabWorkers:'المفتشون', tabHistory:'السجل', tabExport:'التصدير',
-    dashboardTitle:'لوحة البيانات', dashboardSub:'تقدم دورات الفحص في الوقت الفعلي لجميع الفئات.',
-    cycleLabel:'دورة', checkedLabel:'تم فحصها', recentActivity:'النشاط الأخير', simulateReset:'محاكاة إعادة ضبط شهرية',
-    colTimestamp:'الطابع الزمني', colAsset:'العنصر', colId:'المعرف', colWorker:'المفتش', colResult:'النتيجة',
-    colCategory:'الفئة', colLocation:'الموقع', colLastChecked:'آخر فحص', colComment:'ملاحظة', colStatus:'الحالة',
-    colDateChecked:'تاريخ الفحص', colName:'الاسم', colEmployeeNum:'رقم الموظف', colTotal:'إجمالي الفحوصات',
-    colPassRate:'نسبة السلامة', colLastActivity:'النشاط الأخير',
-    alertPanelTitle:'فحوصات غير سليمة تتطلب اهتماماً', alertPanelHint:'انقر على السطر لعرض تفاصيل قائمة التدقيق الكاملة',
-    markResolved:'تعيين كـ تم الحل', noFailedInspections:'لا توجد فحوصات غير سليمة مفتوحة حالياً. 🎉',
-    noInspectionsYet:'لم يتم تسجيل أي فحوصات بعد.',
-    assetsTitle:'الأصول', assetsSub:'إضافة أو تعديل أو إزالة الأصول المتتبعة. يحصل كل أصل تلقائياً على رمز QR فريد — يمكنك طباعة ملصق وإلصاقه على المعدات.',
-    fieldAssetName:'اسم الأصل', fieldAssetId:'معرف الأصل', fieldCategory:'الفئة', fieldLocationLabel:'الموقع',
-    addAssetBtn:'+ إضافة أصل', allItemsTitle:'جميع الأصول', printAllBtn:'🖨️ طباعة جميع ملصقات QR',
-    printQrBtn:'🖨️ طباعة QR', deleteBtn:'حذف', noAssetsYet:'لا توجد أصول بعد.',
-    categoriesTitle:'فئات الفحص', categoriesSub:'إنشاء أنواع فحص جديدة، التحكم في تكرار إعادة الضبط، وتعريف قائمة التدقيق المعروضة للمفتش.',
-    itemsCountLabel:(t,d,total)=>`${t} أصول · ${d}/${total} تم فحصها في هذه الدورة`,
-    newCategoryName:'اسم الفئة الجديدة', frequencyLabel:'التكرار', createCategoryBtn:'+ إنشاء فئة',
-    checklistEditorLabel:'قائمة التدقيق لمفتشي الميدان', addChecklistItemPlaceholder:'إضافة سؤال لقائمة التدقيق...', addBtn:'+ إضافة',
-    noChecklistItems:'لا توجد بنود في قائمة التدقيق — أضف واحداً أدناه',
-    freqWeekly:'أسبوعياً', freqMonthly:'شهرياً', freqQuarterly:'ربع سنوي', freqAnnually:'سنوياً',
-    workersTitle:'المفتشون', workersSub:'تتبع نشاط مفتشي الميدان — انقر على السطر لعرض السجل الكامل للمفتش.',
-    activeWorkers:'المفتشون النشطون', totalInspections:'إجمالي الفحوصات', avgPerWorker:'المتوسط لكل مفتش', topWorker:'المفتش الأكثر نشاطاً',
-    noInspectionsRecorded:'لم يتم تسجيل أي فحوصات في النظام بعد.',
-    historyTitle:'سجل الفحوصات', historySub:'سجل التدقيق الكامل لكل فحص تم تقديمه.',
-    exportTitle:'تصدير بيانات الامتثال', exportSub:'قم بتنزيل سجل الفحوصات الكامل بالتنسيق الذي يتطلبه التدقيق الخاص بك، أو معاينة البيانات أولاً.',
-    csvTitle:'CSV / Excel', csvDesc:'السجل الكامل كملف CSV جاهز للجداول — يفتح مباشرة في Excel.', csvBtn:'تنزيل .csv',
-    wordTitle:'ملف Word', wordDesc:'تقرير امتثال منسق كملف .doc، جاهز للحفظ أو الإرسال.', wordBtn:'تنزيل .doc',
-    pdfTitle:'PDF', pdfDesc:'تقرير جاهز للطباعة. يفتح نافذة الطباعة في متصفحك — اختر "حفظ كـ PDF".', pdfBtn:'إنشاء PDF',
-    previewBtn:'👁 معاينة', reportTitle:'משק בית — تقرير امتثال فحوصات السلامة',
-    inspectionDetailNoChecklist:'لا توجد تفاصيل لقائمة التدقيق متاحة لهذا الفحص (إدخال قديم من ما قبل هذه الميزة).',
-    inspectionDetailResolvedNote:'هذا إدخال حل يدوي من قبل المسؤول — لا توجد قائمة تدقيق كاملة لإعادة الفحص.',
-    commentsHeading:'الملاحظات:',
-    categoryModalChecked:'تم الفحص', categoryModalPending:'في انتظار الفحص',
-    categoryModalNoneChecked:'لم يتم فحص أي عنصر بعد في هذه الدورة', categoryModalAllDone:'تم فحص جميع العناصر في هذه الدورة 🎉',
-    noInspectionHistoryForWorker:'لا توجد فحوصات مسجلة لهذا المفتش.',
-    statusPending:'قيد الانتظار', statusPass:'سليم', statusFail:'غير سليم', statusResolved:'تم الحل',
-  }
-};
