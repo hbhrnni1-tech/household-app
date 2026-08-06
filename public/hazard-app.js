@@ -777,6 +777,11 @@ function submitWorkerLogin(){
   workerDepartment = dept;
   workerLoginError = '';
 
+  // זוכרים את פרטי הבודק בדפדפן הזה, כדי שבסריקות הבאות לא יצטרך להזין שוב
+  try{
+    localStorage.setItem('workerDetails', JSON.stringify({ name, empId, dept }));
+  } catch(e){ /* localStorage לא זמין - לא קריטי */ }
+
   if(pendingScanAssetId){
     const asset = assets.find(a=>a.id === pendingScanAssetId);
     pendingScanAssetId = null;
@@ -1529,23 +1534,32 @@ async function startCameraScan(){
 
   function scanFrame(){
     if(!window.__cameraScanning) return;
-    if(video.readyState === video.HAVE_ENOUGH_DATA && typeof jsQR !== 'undefined'){
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if(code && code.data){
-        const asset = assets.find(a=>a.id === extractAssetIdFromScan(code.data));
-        if(asset){
-          window.__cameraScanning = false;
-          stopCameraStream();
-          goToInspection(asset);
-          return;
-        } else {
-          statusEl.textContent = `קוד נסרק אך לא זוהה במערכת: ${code.data}`;
+    try{
+      if(video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0 && typeof jsQR !== 'undefined'){
+        // מקטינים את הפריים לרזולוציה נמוכה יותר - זה מהיר משמעותית לפענוח
+        // בטלפון, ומונע מהלולאה להיתקע/להאט על מצלמות ברזולוציה גבוהה.
+        const maxDim = 640;
+        const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+        if(code && code.data){
+          const asset = assets.find(a=>a.id === extractAssetIdFromScan(code.data));
+          if(asset){
+            window.__cameraScanning = false;
+            stopCameraStream();
+            goToInspection(asset);
+            return;
+          } else {
+            statusEl.textContent = `קוד נסרק אך לא זוהה במערכת: ${code.data}`;
+          }
         }
       }
+    } catch(err){
+      // לא עוצרים את הלולאה בגלל שגיאה חד-פעמית בפריים בודד
+      console.error('שגיאה בפענוח פריים מהמצלמה:', err);
     }
     requestAnimationFrame(scanFrame);
   }
@@ -2768,12 +2782,31 @@ document.getElementById('topbar-home').addEventListener('click', ()=>{
 // If this page was opened by scanning a printed QR label (?asset=EXT-014),
 // skip the landing screen and go straight to the worker-details form —
 // after login, submitWorkerLogin() routes directly into that asset's form.
+// אם כבר יש פרטי בודק שמורים בדפדפן הזה (מסריקה קודמת), מדלגים גם על
+// טופס הפרטים וקופצים ישר לבדיקה של הפריט שנסרק.
 let pendingScanAssetId = new URLSearchParams(window.location.search).get('asset');
+let __skippedToInspection = false;
 if(pendingScanAssetId && assets.some(a=>a.id===pendingScanAssetId)){
-  mode = 'field-login';
+  let savedWorker = null;
+  try{
+    savedWorker = JSON.parse(localStorage.getItem('workerDetails') || 'null');
+  } catch(e){ savedWorker = null; }
+
+  if(savedWorker && savedWorker.name && savedWorker.empId && savedWorker.dept){
+    inspectorName = savedWorker.name;
+    workerEmployeeNumber = savedWorker.empId;
+    workerDepartment = savedWorker.dept;
+    mode = 'field';
+    const asset = assets.find(a=>a.id===pendingScanAssetId);
+    pendingScanAssetId = null;
+    goToInspection(asset); // goToInspection כבר קורא ל-render בעצמו
+    __skippedToInspection = true;
+  } else {
+    mode = 'field-login';
+  }
 } else {
   pendingScanAssetId = null;
 }
 
-render();
+if(!__skippedToInspection) render();
 })();
