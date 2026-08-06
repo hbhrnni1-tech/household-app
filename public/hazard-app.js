@@ -1520,6 +1520,21 @@ async function startCameraScan(){
     statusEl.textContent = 'הדפדפן הזה לא תומך בגישה למצלמה מהעמוד הזה. ודא שאתה נכנס דרך כתובת http/https אמיתית ולא כקובץ מקומי.';
     return;
   }
+
+  // אם הדפדפן תומך ב-BarcodeDetector המובנה (אותו מנוע שמערכת ההפעלה
+  // עצמה משתמשת בו, בדיוק כמו אפליקציית המצלמה של האייפון) - נשתמש בו
+  // כי הוא הרבה יותר אמין מ-jsQR, במיוחד מול סריקה ממסך (הבהוב/מואר/זווית).
+  // אם הוא לא נתמך (כמו ברוב הדפדפנים ב-iOS), ניפול חזרה ל-jsQR.
+  let barcodeDetector = null;
+  if('BarcodeDetector' in window){
+    try{
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if(formats.includes('qr_code')){
+        barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      }
+    } catch(e){ barcodeDetector = null; }
+  }
+
   try{
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     window.__cameraStream = stream;
@@ -1532,28 +1547,40 @@ async function startCameraScan(){
     statusEl.textContent = 'לא ניתן לגשת למצלמה. ודא שאישרת הרשאת מצלמה בדפדפן, ושהעמוד נטען דרך כתובת אינטרנט אמיתית (לא נפתח כקובץ מקומי).';
   }
 
-  function scanFrame(){
+  function handleDecodedValue(rawValue){
+    const asset = assets.find(a=>a.id === extractAssetIdFromScan(rawValue));
+    if(asset){
+      window.__cameraScanning = false;
+      stopCameraStream();
+      goToInspection(asset);
+      return true;
+    } else {
+      statusEl.textContent = `קוד נסרק אך לא זוהה במערכת: ${rawValue}`;
+      return false;
+    }
+  }
+
+  async function scanFrame(){
     if(!window.__cameraScanning) return;
     try{
-      if(video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0 && typeof jsQR !== 'undefined'){
-        // מקטינים את הפריים לרזולוציה נמוכה יותר - זה מהיר משמעותית לפענוח
-        // בטלפון, ומונע מהלולאה להיתקע/להאט על מצלמות ברזולוציה גבוהה.
-        const maxDim = 640;
-        const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
-        if(code && code.data){
-          const asset = assets.find(a=>a.id === extractAssetIdFromScan(code.data));
-          if(asset){
-            window.__cameraScanning = false;
-            stopCameraStream();
-            goToInspection(asset);
-            return;
-          } else {
-            statusEl.textContent = `קוד נסרק אך לא זוהה במערכת: ${code.data}`;
+      if(video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0){
+        if(barcodeDetector){
+          const codes = await barcodeDetector.detect(video);
+          if(codes && codes.length > 0 && codes[0].rawValue){
+            if(handleDecodedValue(codes[0].rawValue)) return;
+          }
+        } else if(typeof jsQR !== 'undefined'){
+          // מקטינים את הפריים לרזולוציה נמוכה יותר - זה מהיר משמעותית לפענוח
+          // בטלפון, ומונע מהלולאה להיתקע/להאט על מצלמות ברזולוציה גבוהה.
+          const maxDim = 640;
+          const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+          canvas.width = Math.round(video.videoWidth * scale);
+          canvas.height = Math.round(video.videoHeight * scale);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+          if(code && code.data){
+            if(handleDecodedValue(code.data)) return;
           }
         }
       }
